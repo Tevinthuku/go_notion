@@ -14,8 +14,8 @@ docker compose up -d
 
 1. Creating a new migration
 
-In the backend directory, run:
+In the `backend` directory, run:
 
 ```bash
-migrate create -ext sql -dir migrations/sql -seq <migration_name>
+migrate create -ext sql -dir db/migrations/sql -seq <migration_name>
 ```
