@@ -42,9 +42,6 @@ func TestSignInWorks(t *testing.T) {
 	req, _ := http.NewRequest("POST", "/api/auth/signin", strings.NewReader(json))
 	r.ServeHTTP(w, req)
 
-	data := w.Body.String()
-	println(data)
-
 	assert.Equal(t, http.StatusOK, w.Code)
 }
 
