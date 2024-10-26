@@ -1,17 +1,14 @@
 package main
 
 import (
-	"net/http"
+	"go_notion/backend/app"
 
-	"github.com/gin-gonic/gin"
+	_ "github.com/jackc/pgx/v5/stdlib"
+
+	_ "github.com/golang-migrate/migrate/source/file"
 )
 
 func main() {
-	r := gin.Default()
-	r.GET("/ping", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "pong",
-		})
-	})
-	r.Run()
+	app := app.New()
+	app.Run()
 }
