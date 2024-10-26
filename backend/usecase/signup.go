@@ -3,20 +3,20 @@ package usecase
 import (
 	"go_notion/backend/api_error"
 	"go_notion/backend/authtoken"
+	"go_notion/backend/db"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type SignUp struct {
-	db          *pgxpool.Pool
-	tokenConfig *authtoken.TokenConfig
+	db             db.DB
+	tokenGenerator authtoken.TokenGenerator
 }
 
-func NewSignUp(db *pgxpool.Pool, tokenConfig *authtoken.TokenConfig) *SignUp {
-	return &SignUp{db, tokenConfig}
+func NewSignUp(db db.DB, tokenGenerator authtoken.TokenGenerator) *SignUp {
+	return &SignUp{db, tokenGenerator}
 }
 
 type SignUpInput struct {
@@ -73,7 +73,7 @@ func (s *SignUp) SignUp(c *gin.Context) {
 		c.Error(api_error.NewInternalServerError("failed to create user.", err))
 		return
 	}
-	token, err := s.tokenConfig.GenerateToken(userID)
+	token, err := s.tokenGenerator.GenerateToken(userID)
 	if err != nil {
 		c.Error(err)
 		return

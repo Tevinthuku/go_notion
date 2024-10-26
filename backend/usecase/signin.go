@@ -3,20 +3,20 @@ package usecase
 import (
 	"go_notion/backend/api_error"
 	"go_notion/backend/authtoken"
+	"go_notion/backend/db"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type SignIn struct {
-	db          *pgxpool.Pool
-	tokenConfig *authtoken.TokenConfig
+	db             db.DB
+	tokenGenerator authtoken.TokenGenerator
 }
 
-func NewSignIn(db *pgxpool.Pool, tokenConfig *authtoken.TokenConfig) *SignIn {
-	return &SignIn{db: db, tokenConfig: tokenConfig}
+func NewSignIn(db db.DB, tokenGenerator authtoken.TokenGenerator) *SignIn {
+	return &SignIn{db, tokenGenerator}
 }
 
 type SignInInput struct {
@@ -47,7 +47,7 @@ func (s *SignIn) SignIn(c *gin.Context) {
 		return
 	}
 
-	token, err := s.tokenConfig.GenerateToken(userID)
+	token, err := s.tokenGenerator.GenerateToken(userID)
 	if err != nil {
 		c.Error(err)
 		return

@@ -10,6 +10,10 @@ import (
 	"github.com/golang-jwt/jwt"
 )
 
+type TokenGenerator interface {
+	GenerateToken(userID int64) (string, error)
+}
+
 type TokenConfig struct {
 	tokenSecret   string
 	tokenLifeSpan int

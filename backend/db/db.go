@@ -6,6 +6,7 @@ import (
 	"go_notion/backend/db/migrations"
 	"os"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -27,4 +28,8 @@ func Run() *pgxpool.Pool {
 	}
 
 	return dbpool
+}
+
+type DB interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
