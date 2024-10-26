@@ -1,7 +1,8 @@
-package authentication
+package usecase
 
 import (
 	"go_notion/backend/api_error"
+	"go_notion/backend/authtoken"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -9,19 +10,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type AuthenticationRoutesContext struct {
+type SignUp struct {
 	db          *pgxpool.Pool
-	tokenConfig *TokenConfig
+	tokenConfig *authtoken.TokenConfig
 }
 
-func NewAuthentication(db *pgxpool.Pool, tokenConfig *TokenConfig) *AuthenticationRoutesContext {
-	return &AuthenticationRoutesContext{db: db, tokenConfig: tokenConfig}
-}
-
-func (ac *AuthenticationRoutesContext) RegisterRoutes(rg *gin.RouterGroup) {
-	auth := rg.Group("/auth")
-	auth.POST("/sign-up", ac.signUp)
-	auth.POST("/sign-in", ac.signIn)
+func NewSignUp(db *pgxpool.Pool, tokenConfig *authtoken.TokenConfig) *SignUp {
+	return &SignUp{db, tokenConfig}
 }
 
 type SignUpInput struct {
@@ -30,7 +25,7 @@ type SignUpInput struct {
 	Password string `json:"password" binding:"required"`
 }
 
-func (ac *AuthenticationRoutesContext) signUp(c *gin.Context) {
+func (s *SignUp) SignUp(c *gin.Context) {
 	var input SignUpInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.Error(api_error.NewBadRequestError(err.Error(), err))
@@ -46,7 +41,7 @@ func (ac *AuthenticationRoutesContext) signUp(c *gin.Context) {
 	input.Password = string(hashedPassword)
 
 	var existingEmailCount, existingUserNameCount int
-	err = ac.db.QueryRow(c, `
+	err = s.db.QueryRow(c, `
 		SELECT 
 			(SELECT COUNT(*) FROM users WHERE email = $1),
 			(SELECT COUNT(*) FROM users WHERE username = $2)
@@ -68,7 +63,7 @@ func (ac *AuthenticationRoutesContext) signUp(c *gin.Context) {
 	}
 
 	var userID int64
-	err = ac.db.QueryRow(c, `
+	err = s.db.QueryRow(c, `
 		INSERT INTO users (email, username, password) 
 		VALUES ($1, $2, $3) 
 		RETURNING id
@@ -78,50 +73,15 @@ func (ac *AuthenticationRoutesContext) signUp(c *gin.Context) {
 		c.Error(api_error.NewInternalServerError("failed to create user.", err))
 		return
 	}
-	token, err := ac.tokenConfig.GenerateToken(userID)
+	token, err := s.tokenConfig.GenerateToken(userID)
 	if err != nil {
 		c.Error(err)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"token": token})
-
 }
 
-type SignInInput struct {
-	Email    string `json:"email" binding:"required"`
-	Password string `json:"password" binding:"required"`
-}
-
-func (ac *AuthenticationRoutesContext) signIn(c *gin.Context) {
-	var input SignInInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.Error(api_error.NewBadRequestError(err.Error(), err))
-		return
-	}
-
-	var userID int64
-	var hashedPassword string
-
-	err := ac.db.QueryRow(c, "select id, password from users where email=$1", input.Email).Scan(&userID, &hashedPassword)
-
-	if err != nil {
-		c.Error(api_error.NewBadRequestError("wrong email or password", err))
-		return
-	}
-	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(input.Password)); err != nil {
-		// as a security practice, we should not be too direct about what exactly went wrong because
-		// "hackers" could try and brute force the password once we let them know its the password that's wrong
-		c.Error(api_error.NewBadRequestError("wrong email or password", err))
-		return
-	}
-
-	token, err := ac.tokenConfig.GenerateToken(userID)
-	if err != nil {
-		c.Error(err)
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"token": token})
-
+func (s *SignUp) RegisterRoutes(router *gin.RouterGroup) {
+	router.POST("/auth/signup", s.SignUp)
 }

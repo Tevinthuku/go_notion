@@ -2,8 +2,9 @@ package app
 
 import (
 	"go_notion/backend/api_error"
-	"go_notion/backend/authentication"
+	"go_notion/backend/authtoken"
 	"go_notion/backend/db"
+	"go_notion/backend/usecase"
 	"log"
 
 	"github.com/gin-gonic/gin"
@@ -11,11 +12,15 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type UseCase interface {
+	RegisterRoutes(router *gin.RouterGroup)
+}
+
 type App struct {
 	pool        *pgxpool.Pool
 	router      *gin.Engine
-	tokenConfig *authentication.TokenConfig
-	auth        *authentication.AuthenticationRoutesContext
+	tokenConfig *authtoken.TokenConfig
+	usecases    []UseCase
 }
 
 func New() *App {
@@ -28,14 +33,17 @@ func New() *App {
 
 	router := gin.Default()
 	router.Use(api_error.Errorhandler())
-	tokenConfig, err := authentication.NewTokenConfig()
+	tokenConfig, err := authtoken.NewTokenConfig()
 	if err != nil {
 		log.Fatalf("Error creating token config: %v", err)
 	}
 
-	auth := authentication.NewAuthentication(pool, tokenConfig)
+	signin := usecase.NewSignIn(pool, tokenConfig)
+	signup := usecase.NewSignUp(pool, tokenConfig)
 
-	return &App{pool, router, tokenConfig, auth}
+	usecases := []UseCase{signup, signin}
+
+	return &App{pool, router, tokenConfig, usecases}
 }
 
 func (app *App) Run() {
@@ -47,5 +55,7 @@ func (app *App) Run() {
 
 func (app *App) SetupRoutes() {
 	router := app.router.Group("/api")
-	app.auth.RegisterRoutes(router)
+	for _, usecase := range app.usecases {
+		usecase.RegisterRoutes(router)
+	}
 }
