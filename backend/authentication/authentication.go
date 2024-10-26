@@ -1,10 +1,12 @@
 package authentication
 
 import (
+	"go_notion/backend/api_error"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthenticationContext struct {
@@ -32,5 +34,41 @@ func (ac *AuthenticationContext) signUp(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), bcrypt.DefaultCost)
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("Failed to hash password. Try a different password", err))
+		return
+	}
+
+	input.Password = string(hashedPassword)
+
+	var existingEmailCount, existingUserNameCount int
+	err = ac.db.QueryRow(c, `
+		SELECT 
+			(SELECT COUNT(*) FROM users WHERE email = $1),
+			(SELECT COUNT(*) FROM users WHERE username = $2)
+	`, input.Email, input.Username).Scan(&existingEmailCount, &existingUserNameCount)
+
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("User validation check failed. Please try again.", err))
+		return
+	}
+
+	if existingEmailCount > 0 {
+		c.Error(api_error.NewBadRequestError("Email already in use", nil))
+		return
+	}
+
+	if existingUserNameCount > 0 {
+		c.Error(api_error.NewBadRequestError("Username already taken", nil))
+		return
+	}
+
+	_, err = ac.db.Exec(c, "INSERT INTO users (email, username, password) VALUES ($1, $2, $3)", input.Email, input.Username, input.Password)
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("Failed to create user", err))
+		return
+	}
+
 }

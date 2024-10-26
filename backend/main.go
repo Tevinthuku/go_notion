@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"go_notion/backend/api_error"
 	"log"
 	"net/http"
 	"os"
@@ -68,6 +69,7 @@ func main() {
 	defer dbpool.Close()
 
 	r := gin.Default()
+	r.Use(api_error.Errorhandler())
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "pong",
