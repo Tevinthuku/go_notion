@@ -9,16 +9,16 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type AuthenticationContext struct {
+type AuthenticationRoutesContext struct {
 	db          *pgxpool.Pool
 	tokenConfig *TokenConfig
 }
 
-func NewAuthenticationContext(db *pgxpool.Pool, tokenConfig *TokenConfig) *AuthenticationContext {
-	return &AuthenticationContext{db: db, tokenConfig: tokenConfig}
+func NewAuthentication(db *pgxpool.Pool, tokenConfig *TokenConfig) *AuthenticationRoutesContext {
+	return &AuthenticationRoutesContext{db: db, tokenConfig: tokenConfig}
 }
 
-func (ac *AuthenticationContext) RegisterRoutes(rg *gin.RouterGroup) {
+func (ac *AuthenticationRoutesContext) RegisterRoutes(rg *gin.RouterGroup) {
 	auth := rg.Group("/auth")
 	auth.POST("/sign-up", ac.signUp)
 	auth.POST("/sign-in", ac.signIn)
@@ -30,7 +30,7 @@ type SignUpInput struct {
 	Password string `json:"password" binding:"required"`
 }
 
-func (ac *AuthenticationContext) signUp(c *gin.Context) {
+func (ac *AuthenticationRoutesContext) signUp(c *gin.Context) {
 	var input SignUpInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.Error(api_error.NewBadRequestError(err.Error(), err))
@@ -93,7 +93,7 @@ type SignInInput struct {
 	Password string `json:"password" binding:"required"`
 }
 
-func (ac *AuthenticationContext) signIn(c *gin.Context) {
+func (ac *AuthenticationRoutesContext) signIn(c *gin.Context) {
 	var input SignInInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.Error(api_error.NewBadRequestError(err.Error(), err))

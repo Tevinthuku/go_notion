@@ -2,6 +2,7 @@ package authentication
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -15,12 +16,14 @@ type TokenConfig struct {
 }
 
 func NewTokenConfig() (*TokenConfig, error) {
+	// loading of env variables is done at app startup
 	tokenSecret, ok := os.LookupEnv("TOKEN_SECRET")
 	if !ok {
 		return nil, fmt.Errorf("TOKEN_SECRET is not set")
 	}
 	tokenLifeSpan, ok := os.LookupEnv("TOKEN_HOUR_LIFESPAN")
 	if !ok {
+		log.Println("TOKEN_HOUR_LIFESPAN is not set, defaulting to 24 hours")
 		tokenLifeSpan = "24"
 	}
 	tokenLifeSpanInt, err := strconv.Atoi(tokenLifeSpan)
