@@ -1,7 +1,21 @@
 ## Setup
 
-1. Run docker compose file
+1. Useful tools to install
+
+- Migrate CLI - https://github.com/golang-migrate/migrate/tree/master/cmd/migrate
+
+2. Run docker compose file
 
 ```bash
 docker compose up -d
+```
+
+## Contributing:
+
+1. Creating a new migration
+
+In the backend directory, run:
+
+```bash
+migrate create -ext sql -dir migrations -seq <migration_name>
 ```
