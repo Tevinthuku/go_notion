@@ -37,11 +37,11 @@ func New(port string) (*App, error) {
 		return nil, fmt.Errorf("unable to create database pool: %v", err)
 	}
 
-	router := router.NewRouter()
+	appRouter := router.NewRouter()
 
 	server := &http.Server{
 		Addr:    port,
-		Handler: router,
+		Handler: appRouter,
 	}
 	tokenConfig, err := authtoken.NewTokenConfig()
 	if err != nil {
@@ -59,7 +59,7 @@ func New(port string) (*App, error) {
 
 	usecases := []UseCase{signup, signin}
 
-	apiGroup := router.Group("/api/v1")
+	apiGroup := appRouter.Group("/api/v1")
 	for _, usecase := range usecases {
 		usecase.RegisterRoutes(apiGroup)
 	}
@@ -72,8 +72,8 @@ func (app *App) Run() error {
 }
 
 func (app *App) Shutdown(ctx context.Context) error {
-	defer app.pool.Close()
 	log.Println("shutting down app")
+	app.pool.Close()
 	return app.server.Shutdown(ctx)
 }
 

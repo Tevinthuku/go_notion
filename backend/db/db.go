@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"go_notion/backend/db/migrations"
 	"os"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -29,10 +30,21 @@ func Run() (*pgxpool.Pool, error) {
 	}
 	// setting connection pool limits to prevent resource exhaustion
 	config.MaxConns = 20
+	config.MinConns = 2
+	config.MaxConnLifetime = 1 * time.Hour
+	config.MaxConnIdleTime = 30 * time.Minute
+	config.HealthCheckPeriod = 1 * time.Minute
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-	dbpool, err := pgxpool.NewWithConfig(context.Background(), config)
+	dbpool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create connection pool: %v", err)
+	}
+	// we need to verify connection before returning the pool so we don't return a pool with broken connections that can't be used
+	if err := dbpool.Ping(ctx); err != nil {
+		dbpool.Close()
+		return nil, fmt.Errorf("failed to verify database connection: %v", err)
 	}
 
 	return dbpool, nil

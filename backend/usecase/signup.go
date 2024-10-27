@@ -6,6 +6,7 @@ import (
 	"go_notion/backend/api_error"
 	"go_notion/backend/authtoken"
 	"go_notion/backend/db"
+	"log"
 	"net/http"
 	"os"
 	"time"
@@ -56,7 +57,7 @@ func (s *SignUp) SignUp(c *gin.Context) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), cost)
 	if err != nil {
-		c.Error(api_error.NewInternalServerError("Failed to hash password. Try a different password", err))
+		c.Error(api_error.NewInternalServerError("failed to process password", err))
 		return
 	}
 
@@ -68,7 +69,13 @@ func (s *SignUp) SignUp(c *gin.Context) {
 		c.Error(api_error.NewInternalServerError("internal server error", err))
 		return
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
+			if cerr := c.Error(api_error.NewInternalServerError("internal server error", err)); cerr != nil {
+				log.Printf("failed to rollback transaction: %v", cerr)
+			}
+		}
+	}()
 
 	var existingEmailCount, existingUserNameCount int
 	err = tx.QueryRow(ctx, `
@@ -78,7 +85,7 @@ func (s *SignUp) SignUp(c *gin.Context) {
 	`, input.Email, input.Username).Scan(&existingEmailCount, &existingUserNameCount)
 
 	if err != nil {
-		c.Error(api_error.NewInternalServerError("user validation check failed. Please try again.", err))
+		c.Error(api_error.NewInternalServerError("failed to validate user", err))
 		return
 	}
 

@@ -2,6 +2,7 @@ package router
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,8 +27,11 @@ type RateLimitConfig struct {
 // IPRateLimiter middleware generator
 func IPRateLimiter(config RateLimitConfig) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		ip := c.ClientIP()
-		limiterKey := ip + c.FullPath() // Unique key for each IP and route combination
+		ip := getRealIP(c)
+
+		// using method + path because we can have the same path for different methods
+		routeKey := c.Request.Method + c.FullPath()
+		limiterKey := ip + ":" + routeKey
 
 		limiterI, exists := ipLimiters.Load(limiterKey)
 		if !exists {
@@ -49,4 +53,24 @@ func IPRateLimiter(config RateLimitConfig) gin.HandlerFunc {
 		}
 		c.Next()
 	}
+}
+
+// getRealIP attempts to get the real IP address considering proxy headers
+// using c.ClientIP() is not enough because the IP address can be spoofed using proxy headers
+func getRealIP(c *gin.Context) string {
+	// Check X-Forwarded-For header
+	if xff := c.GetHeader("X-Forwarded-For"); xff != "" {
+		ips := strings.Split(xff, ",")
+		// Get the first (original) IP in the list
+		if len(ips) > 0 {
+			return strings.TrimSpace(ips[0])
+		}
+	}
+
+	// Check X-Real-IP header
+	if xrip := c.GetHeader("X-Real-IP"); xrip != "" {
+		return xrip
+	}
+
+	return c.ClientIP()
 }
