@@ -1,10 +1,13 @@
 package usecase
 
 import (
+	"context"
+	"fmt"
 	"go_notion/backend/api_error"
 	"go_notion/backend/authtoken"
 	"go_notion/backend/db"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
@@ -15,16 +18,22 @@ type SignIn struct {
 	tokenGenerator authtoken.TokenGenerator
 }
 
-func NewSignIn(db db.DB, tokenGenerator authtoken.TokenGenerator) *SignIn {
-	return &SignIn{db, tokenGenerator}
+func NewSignIn(db db.DB, tokenGenerator authtoken.TokenGenerator) (*SignIn, error) {
+	if db == nil || tokenGenerator == nil {
+		return nil, fmt.Errorf("db and tokenGenerator cannot be nil")
+	}
+	return &SignIn{db, tokenGenerator}, nil
 }
 
 type SignInInput struct {
-	Email    string `json:"email" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=5"`
 }
 
 func (s *SignIn) SignIn(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
 	var input SignInInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.Error(api_error.NewBadRequestError(err.Error(), err))
@@ -34,7 +43,7 @@ func (s *SignIn) SignIn(c *gin.Context) {
 	var userID int64
 	var hashedPassword string
 
-	err := s.db.QueryRow(c, "select id, password from users where email=$1", input.Email).Scan(&userID, &hashedPassword)
+	err := s.db.QueryRow(ctx, "select id, password from users where email=$1", input.Email).Scan(&userID, &hashedPassword)
 
 	if err != nil {
 		c.Error(api_error.NewBadRequestError("wrong email or password", err))
@@ -49,7 +58,7 @@ func (s *SignIn) SignIn(c *gin.Context) {
 
 	token, err := s.tokenGenerator.GenerateToken(userID)
 	if err != nil {
-		c.Error(err)
+		c.Error(api_error.NewInternalServerError("authentication failed", err))
 		return
 	}
 

@@ -2,8 +2,6 @@ module go_notion
 
 go 1.23.2
 
-require github.com/golang-migrate/migrate v3.5.4+incompatible
-
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pashagolub/pgxmock/v4 v4.3.0 // indirect
@@ -23,7 +21,6 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.22.1 // indirect
 	github.com/goccy/go-json v0.10.3 // indirect
-	github.com/golang-jwt/jwt v3.2.2+incompatible
 	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/golang-migrate/migrate/v4 v4.18.1 // indirect
 	github.com/hashicorp/errwrap v1.1.0 // indirect

@@ -14,69 +14,54 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-func TestSignInWorks(t *testing.T) {
-	mock, err := pgxmock.NewPool()
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer mock.Close()
-	password := "password"
-	// we need to hash the password to compare it with the hashed password in the database
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatal(err)
-	}
-	hashedPasswordString := string(hashedPassword)
-	mock.ExpectQuery("select").
-		WithArgs("test@test.com").
-		WillReturnRows(pgxmock.NewRows([]string{"id", "password"}).AddRow(int64(1), hashedPasswordString))
-
-	tokenGenerator := &mocks.TokenGeneratorMock{}
-	signIn := usecase.NewSignIn(mock, tokenGenerator)
-
-	r := router.NewRouter()
-	signIn.RegisterRoutes(r.Group("/api"))
-
-	w := httptest.NewRecorder()
-
-	json := `{"email": "test@test.com", "password": "password"}`
-	req, _ := http.NewRequest("POST", "/api/auth/signin", strings.NewReader(json))
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-}
-
-func TestWrongPasswordReturnsAnError(t *testing.T) {
+func TestSignIn(t *testing.T) {
 	mock, err := pgxmock.NewPool()
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mock.Close()
 
-	password := "password"
-	// we need to hash the password to compare it with the hashed password in the database
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		t.Fatal(err)
+	tests := []struct {
+		name          string
+		email         string
+		userPassword  string
+		passwordInput string
+		expectedCode  int
+	}{
+		{name: "test", email: "test@test.com", userPassword: "password", passwordInput: "password", expectedCode: http.StatusOK},
+		{name: "test", email: "test@test.com", userPassword: "password", passwordInput: "wrongpassword", expectedCode: http.StatusBadRequest},
 	}
-	hashedPasswordString := string(hashedPassword)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(test.userPassword), usecase.MinBcryptCost)
+			if err != nil {
+				t.Fatal(err)
+			}
+			hashedPasswordString := string(hashedPassword)
 
-	mock.ExpectQuery("select").
-		WithArgs("test@test.com").
-		WillReturnRows(pgxmock.NewRows([]string{"id", "password"}).AddRow(1, hashedPasswordString))
+			mock.ExpectQuery(`
+					select id, password from users where email=\$1
+				`).
+				WithArgs(test.email).
+				WillReturnRows(pgxmock.NewRows([]string{"id", "password"}).AddRow(int64(1), hashedPasswordString))
 
-	tokenGenerator := &mocks.TokenGeneratorMock{}
-	signIn := usecase.NewSignIn(mock, tokenGenerator)
+			tokenGenerator := &mocks.TokenGeneratorMock{}
+			signIn, err := usecase.NewSignIn(mock, tokenGenerator)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-	r := router.NewRouter()
-	signIn.RegisterRoutes(r.Group("/api"))
+			r := router.NewRouter()
+			signIn.RegisterRoutes(r.Group("/api"))
 
-	w := httptest.NewRecorder()
+			w := httptest.NewRecorder()
 
-	// pass wrong password
-	json := `{"email": "test@test.com", "password": "wrongpassword"}`
-	req, _ := http.NewRequest("POST", "/api/auth/signin", strings.NewReader(json))
-	r.ServeHTTP(w, req)
+			json := `{"email": "` + test.email + `", "password": "` + test.passwordInput + `"}`
+			req, _ := http.NewRequest("POST", "/api/auth/signin", strings.NewReader(json))
+			r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+			assert.Equal(t, test.expectedCode, w.Code)
+		})
+	}
+
 }

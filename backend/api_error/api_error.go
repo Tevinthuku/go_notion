@@ -17,16 +17,18 @@ func (e *ApiError) Error() string {
 	return e.Message
 }
 
-func NewApiError(message string, code int, err error) *ApiError {
-	return &ApiError{Message: message, Code: code, Err: err}
-}
-
+// NewInternalServerError creates a new API error with StatusInternalServerError
 func NewInternalServerError(message string, err error) *ApiError {
-	return NewApiError(message, http.StatusInternalServerError, err)
+	return newApiError(message, http.StatusInternalServerError, err)
 }
 
+// NewBadRequestError creates a new API error with StatusBadRequest
 func NewBadRequestError(message string, err error) *ApiError {
-	return NewApiError(message, http.StatusBadRequest, err)
+	return newApiError(message, http.StatusBadRequest, err)
+}
+
+func newApiError(message string, code int, err error) *ApiError {
+	return &ApiError{Message: message, Code: code, Err: err}
 }
 
 func Errorhandler() gin.HandlerFunc {
@@ -34,20 +36,35 @@ func Errorhandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// we call .Next() to allow middlewares and handlers to run first before checking for errors.
 		c.Next()
-
 		if len(c.Errors) > 0 {
-			apiError := c.Errors.Last().Err
-			switch err := apiError.(type) {
-			case *ApiError:
-				if err.Err != nil {
-					log.Printf("Error: %v", err.Err)
+			var errs []gin.H
+			for _, err := range c.Errors {
+				switch err := err.Err.(type) {
+				case *ApiError:
+					log.Printf("ApiError: %v", err.Err)
+					errs = append(errs, gin.H{"error": err.Message})
+				default:
+					log.Printf("Unexpected error: %v", err)
+					errs = append(errs, gin.H{"error": "Internal server error"})
 				}
-				c.JSON(err.Code, gin.H{"error": err.Message})
-			default:
-				log.Printf("Unexpected error: %v", err)
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 			}
+			// Return all errors with the status code of the most severe error
+			c.JSON(highestStatusCode(c.Errors), gin.H{"errors": errs})
 			c.Abort()
 		}
 	}
+}
+
+func highestStatusCode(errs []*gin.Error) int {
+	highest := http.StatusOK
+	for _, err := range errs {
+		if apiErr, ok := err.Err.(*ApiError); ok && apiErr.Code > highest {
+			highest = apiErr.Code
+		}
+	}
+	// if no error code is set, return 500. We expect the status code to not be 200 since we have caught at least 1 error.
+	if highest == http.StatusOK {
+		return http.StatusInternalServerError
+	}
+	return highest
 }

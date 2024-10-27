@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/golang-migrate/migrate"
-	"github.com/golang-migrate/migrate/database/postgres"
+	"github.com/golang-migrate/migrate/v4"
+	"github.com/golang-migrate/migrate/v4/database/postgres"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	_ "github.com/golang-migrate/migrate/source/file"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 )
 
 func Run(dbURL string) error {

@@ -2,6 +2,7 @@ package router
 
 import (
 	"go_notion/backend/api_error"
+	"net/http"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -15,5 +16,13 @@ func NewRouter() *gin.Engine {
 	}
 	router := gin.Default()
 	router.Use(api_error.Errorhandler())
+	router.Use(panicRecoveryHandler())
 	return router
+}
+
+func panicRecoveryHandler() gin.HandlerFunc {
+	return gin.RecoveryWithWriter(gin.DefaultErrorWriter,
+		func(c *gin.Context, recovered interface{}) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+		})
 }

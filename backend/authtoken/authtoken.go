@@ -7,7 +7,13 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
+)
+
+const (
+	TokenSecretEnvVar    = "TOKEN_SECRET"
+	TokenLifeSpanEnvVar  = "TOKEN_HOUR_LIFESPAN"
+	DefaultTokenLifeSpan = "24"
 )
 
 type TokenGenerator interface {
@@ -21,17 +27,17 @@ type TokenConfig struct {
 
 func NewTokenConfig() (*TokenConfig, error) {
 	// loading of env variables is done at app startup
-	tokenSecret, ok := os.LookupEnv("TOKEN_SECRET")
+	tokenSecret, ok := os.LookupEnv(TokenSecretEnvVar)
 	if !ok {
-		return nil, fmt.Errorf("TOKEN_SECRET is not set")
+		return nil, fmt.Errorf("authentication configuration error: %s environment variable is not set", TokenSecretEnvVar)
 	}
-	tokenLifeSpan, ok := os.LookupEnv("TOKEN_HOUR_LIFESPAN")
+	tokenLifeSpan, ok := os.LookupEnv(TokenLifeSpanEnvVar)
 	if !ok {
-		log.Println("TOKEN_HOUR_LIFESPAN is not set, defaulting to 24 hours")
-		tokenLifeSpan = "24"
+		log.Printf("authentication configuration error: %s environment variable is not set, defaulting to %s hours", TokenLifeSpanEnvVar, DefaultTokenLifeSpan)
+		tokenLifeSpan = DefaultTokenLifeSpan
 	}
 	tokenLifeSpanInt, err := strconv.Atoi(tokenLifeSpan)
-	if err != nil {
+	if err != nil || tokenLifeSpanInt <= 0 {
 		return nil, fmt.Errorf("invalid token lifespan: %s. Full error: %w", tokenLifeSpan, err)
 	}
 	return &TokenConfig{tokenSecret: tokenSecret, tokenLifeSpan: tokenLifeSpanInt}, nil
