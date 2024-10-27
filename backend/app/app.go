@@ -27,15 +27,17 @@ type App struct {
 }
 
 func New(port string) (*App, error) {
-
+	app := &App{}
 	err := loadEnv()
 	if err != nil {
-		return nil, fmt.Errorf("error loading .env file: %v", err)
+		return nil, fmt.Errorf("error loading .env file: %w", err)
 	}
 	pool, err := db.Run()
 	if err != nil {
-		return nil, fmt.Errorf("unable to create database pool: %v", err)
+		return nil, fmt.Errorf("unable to create database pool: %w", err)
 	}
+
+	app.pool = pool
 
 	appRouter := router.NewRouter()
 
@@ -43,18 +45,23 @@ func New(port string) (*App, error) {
 		Addr:    port,
 		Handler: appRouter,
 	}
+	app.server = server
 	tokenConfig, err := authtoken.NewTokenConfig()
 	if err != nil {
-		return nil, fmt.Errorf("error creating token config: %v", err)
+		app.Shutdown(context.Background())
+		return nil, fmt.Errorf("error creating token config: %w", err)
 	}
+	app.tokenConfig = tokenConfig
 
 	signin, err := usecase.NewSignIn(pool, tokenConfig)
 	if err != nil {
-		return nil, fmt.Errorf("error creating signin usecase: %v", err)
+		app.Shutdown(context.Background())
+		return nil, fmt.Errorf("error creating signin usecase: %w", err)
 	}
 	signup, err := usecase.NewSignUp(pool, tokenConfig)
 	if err != nil {
-		return nil, fmt.Errorf("error creating signup usecase: %v", err)
+		app.Shutdown(context.Background())
+		return nil, fmt.Errorf("error creating signup usecase: %w", err)
 	}
 
 	usecases := []UseCase{signup, signin}
@@ -64,11 +71,14 @@ func New(port string) (*App, error) {
 		usecase.RegisterRoutes(apiGroup)
 	}
 
-	return &App{pool, server, tokenConfig}, nil
+	return app, nil
 }
 
 func (app *App) Run() error {
-	return app.server.ListenAndServe()
+	if err := app.server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("server error: %w", err)
+	}
+	return nil
 }
 
 func (app *App) Shutdown(ctx context.Context) error {

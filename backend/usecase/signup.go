@@ -17,10 +17,10 @@ import (
 )
 
 const (
-	// Recommended cost for development
-	MinBcryptCost = 10
-	// Recommended cost for production
-	ProdBcryptCost = 12
+	// BcryptDevCost is the recommended cost for development environments
+	BcryptDevCost = 10
+	// BcryptProdCost is the recommended cost for production environments
+	BcryptProdCost = 12
 )
 
 type SignUp struct {
@@ -50,9 +50,9 @@ func (s *SignUp) SignUp(c *gin.Context) {
 		c.Error(api_error.NewBadRequestError(err.Error(), err))
 		return
 	}
-	cost := MinBcryptCost
+	cost := BcryptDevCost
 	if os.Getenv("GO_ENV") == "production" {
-		cost = ProdBcryptCost
+		cost = BcryptProdCost
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), cost)
@@ -80,8 +80,10 @@ func (s *SignUp) SignUp(c *gin.Context) {
 	var existingEmailCount, existingUserNameCount int
 	err = tx.QueryRow(ctx, `
 		SELECT 
-			(SELECT COUNT(*) FROM users WHERE email = $1),
-			(SELECT COUNT(*) FROM users WHERE username = $2)
+			COUNT(*) FILTER (WHERE email = $1) as email_count,
+			COUNT(*) FILTER (WHERE username = $2) as username_count
+		FROM users 
+		WHERE email = $1 OR username = $2
 	`, input.Email, input.Username).Scan(&existingEmailCount, &existingUserNameCount)
 
 	if err != nil {
@@ -110,13 +112,15 @@ func (s *SignUp) SignUp(c *gin.Context) {
 		c.Error(api_error.NewInternalServerError("failed to create user.", err))
 		return
 	}
+
+	if err := tx.Commit(ctx); err != nil {
+		c.Error(api_error.NewInternalServerError("internal server error", err))
+		return
+	}
+
 	token, err := s.tokenGenerator.Generate(userID)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("authentication failed", err))
-		return
-	}
-	if err := tx.Commit(ctx); err != nil {
-		c.Error(api_error.NewInternalServerError("internal server error", err))
 		return
 	}
 

@@ -33,7 +33,7 @@ func TestSignIn(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(test.userPassword), usecase.MinBcryptCost)
+			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(test.userPassword), usecase.BcryptDevCost)
 			if err != nil {
 				t.Fatal(err)
 			}

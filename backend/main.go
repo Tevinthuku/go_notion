@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"go_notion/backend/app"
 	"log"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -34,15 +33,16 @@ func runInner(ctx context.Context, stop context.CancelFunc) error {
 
 	app, err := app.New(":8080")
 	if err != nil {
-		return fmt.Errorf("error creating app: %v", err)
+		return fmt.Errorf("error creating app: %w", err)
 	}
 
 	// Initializing the server in a goroutine so that
 	// it won't block the graceful shutdown handling below
 	errChan := make(chan error, 1)
+	defer close(errChan)
 	go func() {
-		if err := app.Run(); err != nil && err != http.ErrServerClosed {
-			errChan <- fmt.Errorf("error running app: %v", err)
+		if err := app.Run(); err != nil {
+			errChan <- fmt.Errorf("error running app: %w", err)
 			stop()
 		}
 	}()
@@ -68,7 +68,7 @@ func runInner(ctx context.Context, stop context.CancelFunc) error {
 	defer cancel()
 
 	if err := app.Shutdown(ctx); err != nil {
-		return fmt.Errorf("error shutting down app: %v", err)
+		return fmt.Errorf("error shutting down app: %w", err)
 	}
 
 	return nil

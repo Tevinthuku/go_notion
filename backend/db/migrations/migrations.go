@@ -16,13 +16,13 @@ func Run(dbURL string) error {
 
 	db, err := sql.Open("pgx", dbURL)
 	if err != nil {
-		return fmt.Errorf("unable to create database: %v", err)
+		return fmt.Errorf("unable to create database: %w", err)
 	}
 	defer db.Close()
 
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
-		return fmt.Errorf("unable to create driver: %v", err)
+		return fmt.Errorf("unable to create driver: %w", err)
 	}
 
 	m, err := migrate.NewWithDatabaseInstance(
@@ -31,7 +31,7 @@ func Run(dbURL string) error {
 		driver,
 	)
 	if err != nil {
-		return fmt.Errorf("unable to create migration: %v", err)
+		return fmt.Errorf("unable to create migration: %w", err)
 	}
 	if err := m.Up(); err != nil {
 		if errors.Is(err, migrate.ErrNoChange) {

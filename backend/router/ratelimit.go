@@ -1,6 +1,7 @@
 package router
 
 import (
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -30,7 +31,8 @@ func IPRateLimiter(config RateLimitConfig) gin.HandlerFunc {
 		ip := getRealIP(c)
 
 		// using method + path because we can have the same path for different methods
-		routeKey := c.Request.Method + c.FullPath()
+		// Use normalized path to prevent memory exhaustion from URL parameter variations
+		routeKey := c.Request.Method + c.Request.URL.Path
 		limiterKey := ip + ":" + routeKey
 
 		limiterI, exists := ipLimiters.Load(limiterKey)
@@ -63,14 +65,24 @@ func getRealIP(c *gin.Context) string {
 		ips := strings.Split(xff, ",")
 		// Get the first (original) IP in the list
 		if len(ips) > 0 {
-			return strings.TrimSpace(ips[0])
+			ip := strings.TrimSpace(ips[0])
+			if isValidIP(ip) {
+				return ip
+			}
 		}
 	}
 
 	// Check X-Real-IP header
 	if xrip := c.GetHeader("X-Real-IP"); xrip != "" {
-		return xrip
+		if isValidIP(xrip) {
+			return xrip
+		}
 	}
 
 	return c.ClientIP()
+}
+
+func isValidIP(ipStr string) bool {
+	ip := net.ParseIP(ipStr)
+	return ip != nil
 }

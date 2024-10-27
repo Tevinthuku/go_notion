@@ -38,11 +38,11 @@ func TestSignUp(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			mock.ExpectBeginTx(pgx.TxOptions{})
 			// mock the query to check if the email or username already exists
-			mock.ExpectQuery(`
-			SELECT 
-				\(SELECT COUNT\(\*\) FROM users WHERE email = \$1\),
-				\(SELECT COUNT\(\*\) FROM users WHERE username = \$2\)
-			`).
+			mock.ExpectQuery(`SELECT 
+			COUNT\(\*\) FILTER \(WHERE email = \$1\) as email_count,
+			COUNT\(\*\) FILTER \(WHERE username = \$2\) as username_count
+				FROM users 
+				WHERE email = \$1 OR username = \$2`).
 				WithArgs(test.email, test.name).
 				WillReturnRows(pgxmock.NewRows([]string{"email_count", "user_name_count"}).AddRow(test.emailCount, test.usernameCount))
 
