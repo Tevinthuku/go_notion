@@ -56,7 +56,7 @@ func (s *SignIn) SignIn(c *gin.Context) {
 		return
 	}
 
-	token, err := s.tokenGenerator.GenerateToken(userID)
+	token, err := s.tokenGenerator.Generate(userID)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("authentication failed", err))
 		return

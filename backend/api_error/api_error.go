@@ -8,9 +8,12 @@ import (
 )
 
 type ApiError struct {
+	// Message contains the user-facing error description
 	Message string
-	Code    int
-	Err     error
+	// Code contains the HTTP status code
+	Code int
+	// Err contains the underlying error for logging purposes
+	Err error
 }
 
 func (e *ApiError) Error() string {

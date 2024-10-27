@@ -31,7 +31,6 @@ func Run() (*pgxpool.Pool, error) {
 	config.MaxConns = 20
 
 	dbpool, err := pgxpool.NewWithConfig(context.Background(), config)
-
 	if err != nil {
 		return nil, fmt.Errorf("unable to create connection pool: %v", err)
 	}
@@ -41,4 +40,5 @@ func Run() (*pgxpool.Pool, error) {
 
 type DB interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
 }

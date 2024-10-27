@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -61,8 +62,16 @@ func (s *SignUp) SignUp(c *gin.Context) {
 
 	input.Password = string(hashedPassword)
 
+	// the check and insert should be in a transaction to prevent race conditions in case of concurrent requests
+	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("internal server error", err))
+		return
+	}
+	defer tx.Rollback(ctx)
+
 	var existingEmailCount, existingUserNameCount int
-	err = s.db.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT 
 			(SELECT COUNT(*) FROM users WHERE email = $1),
 			(SELECT COUNT(*) FROM users WHERE username = $2)
@@ -84,7 +93,7 @@ func (s *SignUp) SignUp(c *gin.Context) {
 	}
 
 	var userID int64
-	err = s.db.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		INSERT INTO users (email, username, password) 
 		VALUES ($1, $2, $3) 
 		RETURNING id
@@ -94,9 +103,13 @@ func (s *SignUp) SignUp(c *gin.Context) {
 		c.Error(api_error.NewInternalServerError("failed to create user.", err))
 		return
 	}
-	token, err := s.tokenGenerator.GenerateToken(userID)
+	token, err := s.tokenGenerator.Generate(userID)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("authentication failed", err))
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		c.Error(api_error.NewInternalServerError("internal server error", err))
 		return
 	}
 

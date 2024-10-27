@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/pashagolub/pgxmock/v4"
 	"github.com/stretchr/testify/assert"
 )
@@ -35,6 +36,7 @@ func TestSignUp(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			mock.ExpectBeginTx(pgx.TxOptions{})
 			// mock the query to check if the email or username already exists
 			mock.ExpectQuery(`
 			SELECT 
@@ -53,6 +55,9 @@ func TestSignUp(t *testing.T) {
 		`).
 					WithArgs(test.email, test.username, mocks.AnyPassword{}).
 					WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(int64(1)))
+				mock.ExpectCommit()
+			} else {
+				mock.ExpectRollback()
 			}
 
 			tokenGenerator := &mocks.TokenGeneratorMock{}

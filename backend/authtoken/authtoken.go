@@ -17,7 +17,7 @@ const (
 )
 
 type TokenGenerator interface {
-	GenerateToken(userID int64) (string, error)
+	Generate(userID int64) (string, error)
 }
 
 type TokenConfig struct {
@@ -43,7 +43,7 @@ func NewTokenConfig() (*TokenConfig, error) {
 	return &TokenConfig{tokenSecret: tokenSecret, tokenLifeSpan: tokenLifeSpanInt}, nil
 }
 
-func (tc *TokenConfig) GenerateToken(userID int64) (string, error) {
+func (tc *TokenConfig) Generate(userID int64) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"user_id": userID,
