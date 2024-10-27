@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"go_notion/backend/mocks"
+	"go_notion/backend/router"
 	"go_notion/backend/usecase"
 	"net/http"
 	"net/http/httptest"
@@ -31,7 +32,7 @@ func TestSignUpWorks(t *testing.T) {
 	tokenGenerator := &mocks.TokenGeneratorMock{}
 	signUp := usecase.NewSignUp(mock, tokenGenerator)
 
-	r := mocks.NewRouter()
+	r := router.NewRouter()
 	signUp.RegisterRoutes(r.Group("/api"))
 
 	w := httptest.NewRecorder()
@@ -58,7 +59,7 @@ func TestSignUpReturnsBadRequestWhenEmailAlreadyExists(t *testing.T) {
 	tokenGenerator := &mocks.TokenGeneratorMock{}
 	signUp := usecase.NewSignUp(mock, tokenGenerator)
 
-	r := mocks.NewRouter()
+	r := router.NewRouter()
 	signUp.RegisterRoutes(r.Group("/api"))
 
 	w := httptest.NewRecorder()

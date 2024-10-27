@@ -2,6 +2,7 @@ package usecase_test
 
 import (
 	"go_notion/backend/mocks"
+	"go_notion/backend/router"
 	"go_notion/backend/usecase"
 	"net/http"
 	"net/http/httptest"
@@ -33,7 +34,7 @@ func TestSignInWorks(t *testing.T) {
 	tokenGenerator := &mocks.TokenGeneratorMock{}
 	signIn := usecase.NewSignIn(mock, tokenGenerator)
 
-	r := mocks.NewRouter()
+	r := router.NewRouter()
 	signIn.RegisterRoutes(r.Group("/api"))
 
 	w := httptest.NewRecorder()
@@ -67,7 +68,7 @@ func TestWrongPasswordReturnsAnError(t *testing.T) {
 	tokenGenerator := &mocks.TokenGeneratorMock{}
 	signIn := usecase.NewSignIn(mock, tokenGenerator)
 
-	r := mocks.NewRouter()
+	r := router.NewRouter()
 	signIn.RegisterRoutes(r.Group("/api"))
 
 	w := httptest.NewRecorder()

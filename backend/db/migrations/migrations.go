@@ -4,25 +4,25 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"log"
-	"os"
 
 	"github.com/golang-migrate/migrate"
 	"github.com/golang-migrate/migrate/database/postgres"
+	_ "github.com/jackc/pgx/v5/stdlib"
+
+	_ "github.com/golang-migrate/migrate/source/file"
 )
 
-func Run(dbURL string) {
+func Run(dbURL string) error {
 
 	db, err := sql.Open("pgx", dbURL)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to create database: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("unable to create database: %v", err)
 	}
+	defer db.Close()
 
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to create driver: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("unable to create driver: %v", err)
 	}
 
 	m, err := migrate.NewWithDatabaseInstance(
@@ -31,12 +31,13 @@ func Run(dbURL string) {
 		driver,
 	)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to create migration: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("unable to create migration: %v", err)
 	}
-	if err := m.Up(); errors.Is(err, migrate.ErrNoChange) {
-		log.Println(err)
-	} else if err != nil {
-		log.Fatalln(err)
+	if err := m.Up(); err != nil {
+		if errors.Is(err, migrate.ErrNoChange) {
+			return nil
+		}
+		return fmt.Errorf("failed to apply migrations: %w", err)
 	}
+	return nil
 }
