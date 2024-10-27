@@ -4,6 +4,7 @@ import (
 	"go_notion/backend/api_error"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -17,6 +18,7 @@ func NewRouter() *gin.Engine {
 	router := gin.Default()
 	router.Use(api_error.Errorhandler())
 	router.Use(panicRecoveryHandler())
+	router.Use(IPRateLimiter(RateLimitConfig{Requests: 60, Period: time.Minute, Burst: 5}))
 	return router
 }
 
