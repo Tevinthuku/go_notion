@@ -15,7 +15,7 @@ docker compose up -d
 In the `backend` directory, run:
 
 ```bash
-migrate -path db/migrations/sql -database "postgres://postgres:postgres@localhost:5432/go_notion?sslmode=disable" up
+migrate -path db/migrations/sql -database "your_database_url" up
 ```
 
 ## Contributing:
@@ -26,4 +26,18 @@ In the `backend` directory, run:
 
 ```bash
 migrate create -ext sql -dir db/migrations/sql -seq <migration_name>
+```
+
+2. Fixing a migration
+
+In the backend directory: when you encounter the following error when a migration is faulty
+
+```
+error: Dirty database version 2. Fix and force version.
+```
+
+run the following command:
+
+```bash
+migrate -database "your_database_url" -path db/migrations/sql force 1
 ```
