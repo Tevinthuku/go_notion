@@ -96,9 +96,10 @@ func (tc *TokenConfig) extractUserID(c *gin.Context) (int64, error) {
 	}
 
 	claims := parsedToken.Claims.(jwt.MapClaims)
-	userID, ok := claims["user_id"].(int64)
+	// When parsing JSON numbers, the default type for numbers in Go's map[string]interface{} is float64, not int64
+	userID, ok := claims["user_id"].(float64)
 	if !ok {
 		return 0, fmt.Errorf("invalid token. user_id claim not found")
 	}
-	return userID, nil
+	return int64(userID), nil
 }
