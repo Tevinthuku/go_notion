@@ -30,6 +30,11 @@ func NewBadRequestError(message string, err error) *ApiError {
 	return newApiError(message, http.StatusBadRequest, err)
 }
 
+// NewUnauthorizedError creates a new API error with StatusUnauthorized
+func NewUnauthorizedError(message string, err error) *ApiError {
+	return newApiError(message, http.StatusUnauthorized, err)
+}
+
 func newApiError(message string, code int, err error) *ApiError {
 	return &ApiError{Message: message, Code: code, Err: err}
 }
