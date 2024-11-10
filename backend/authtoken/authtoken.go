@@ -3,10 +3,12 @@ package authtoken
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"strconv"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -55,4 +57,42 @@ func (tc *TokenConfig) Generate(userID int64) (string, error) {
 		return "", fmt.Errorf("failed to generate token: %w", err)
 	}
 	return tokenString, nil
+}
+
+func (tc *TokenConfig) AuthMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		token := c.GetHeader("Authorization")
+		if token == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "No token provided",
+			})
+			c.Abort()
+			return
+		}
+		token = token[len("Bearer "):]
+
+		parsedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+			return []byte(tc.tokenSecret), nil
+		})
+		if err != nil || !parsedToken.Valid {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid token",
+			})
+			c.Abort()
+			return
+		}
+
+		claims := parsedToken.Claims.(jwt.MapClaims)
+		userID, ok := claims["user_id"].(int64)
+		if !ok {
+			c.JSON(http.StatusUnauthorized, gin.H{
+				"error": "Invalid token",
+			})
+			c.Abort()
+			return
+		}
+		c.Set("user_id", userID)
+
+		c.Next()
+	}
 }
