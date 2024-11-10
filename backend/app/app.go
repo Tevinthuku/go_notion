@@ -64,11 +64,17 @@ func New(port string) (*App, error) {
 		return nil, fmt.Errorf("error creating signup usecase: %w", err)
 	}
 
-	usecases := []UseCase{signup, signin}
+	// public routes
+	apiv1 := appRouter.Group("/api/v1")
+	for _, usecase := range []UseCase{signup, signin} {
+		usecase.RegisterRoutes(apiv1)
+	}
 
-	apiGroup := appRouter.Group("/api/v1")
-	for _, usecase := range usecases {
-		usecase.RegisterRoutes(apiGroup)
+	// protected routes
+	protectedUsecases := []UseCase{}
+	protectedApiGroup := apiv1.Group("", tokenConfig.AuthMiddleware())
+	for _, usecase := range protectedUsecases {
+		usecase.RegisterRoutes(protectedApiGroup)
 	}
 
 	return app, nil

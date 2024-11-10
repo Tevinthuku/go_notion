@@ -61,30 +61,9 @@ func (tc *TokenConfig) Generate(userID int64) (string, error) {
 
 func (tc *TokenConfig) AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		token := c.GetHeader("Authorization")
-		if token == "" {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "No token provided",
-			})
-			c.Abort()
-			return
-		}
-		token = token[len("Bearer "):]
-
-		parsedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
-			return []byte(tc.tokenSecret), nil
-		})
-		if err != nil || !parsedToken.Valid {
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid token",
-			})
-			c.Abort()
-			return
-		}
-
-		claims := parsedToken.Claims.(jwt.MapClaims)
-		userID, ok := claims["user_id"].(int64)
-		if !ok {
+		userID, err := tc.extractUserID(c)
+		if err != nil {
+			log.Printf("userId extraction error: %v", err)
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Invalid token",
 			})
@@ -95,4 +74,31 @@ func (tc *TokenConfig) AuthMiddleware() gin.HandlerFunc {
 
 		c.Next()
 	}
+}
+
+func (tc *TokenConfig) extractUserID(c *gin.Context) (int64, error) {
+	token := c.GetHeader("Authorization")
+	if token == "" {
+		return 0, fmt.Errorf("no token provided")
+	}
+	token = token[len("Bearer "):]
+
+	parsedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+		return []byte(tc.tokenSecret), nil
+	})
+
+	if err != nil {
+		return 0, fmt.Errorf("error parsing token: %w", err)
+	}
+
+	if !parsedToken.Valid {
+		return 0, fmt.Errorf("invalid token")
+	}
+
+	claims := parsedToken.Claims.(jwt.MapClaims)
+	userID, ok := claims["user_id"].(int64)
+	if !ok {
+		return 0, fmt.Errorf("invalid token. user_id claim not found")
+	}
+	return userID, nil
 }
