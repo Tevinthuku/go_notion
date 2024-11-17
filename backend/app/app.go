@@ -78,8 +78,14 @@ func New(port string) (*App, error) {
 		return nil, fmt.Errorf("error creating page usecase: %w", err)
 	}
 
+	updatePage, err := usecase.NewUpdatePageUseCase(pool)
+	if err != nil {
+		app.Shutdown(context.Background())
+		return nil, fmt.Errorf("error creating update page usecase: %w", err)
+	}
+
 	// protected routes
-	protectedUsecases := []UseCase{newPage}
+	protectedUsecases := []UseCase{newPage, updatePage}
 	protectedApiGroup := apiv1.Group("", tokenConfig.AuthMiddleware())
 	for _, usecase := range protectedUsecases {
 		usecase.RegisterRoutes(protectedApiGroup)

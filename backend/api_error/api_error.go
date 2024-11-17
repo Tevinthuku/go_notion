@@ -35,6 +35,11 @@ func NewUnauthorizedError(message string, err error) *ApiError {
 	return newApiError(message, http.StatusUnauthorized, err)
 }
 
+// NewNotFoundError creates a new API error with StatusNotFound
+func NewNotFoundError(message string, err error) *ApiError {
+	return newApiError(message, http.StatusNotFound, err)
+}
+
 func newApiError(message string, code int, err error) *ApiError {
 	return &ApiError{Message: message, Code: code, Err: err}
 }

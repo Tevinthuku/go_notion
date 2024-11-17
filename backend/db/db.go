@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	pgxuuid "github.com/jackc/pgx-gofrs-uuid"
@@ -61,4 +62,5 @@ func Run() (*pgxpool.Pool, error) {
 type DB interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, arguments ...any) (commandTag pgconn.CommandTag, err error)
 }
