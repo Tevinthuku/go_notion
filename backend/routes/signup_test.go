@@ -61,7 +61,7 @@ func TestSignUp(t *testing.T) {
 			}
 
 			tokenGenerator := &mocks.TokenGeneratorMock{}
-			signUp, err := routes.NewSignUp(mock, tokenGenerator)
+			signUp, err := routes.NewSignUpHandler(mock, tokenGenerator)
 			if err != nil {
 				t.Fatal(err)
 			}

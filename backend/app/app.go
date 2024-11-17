@@ -59,7 +59,7 @@ func New(port string) (*App, error) {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating signin usecase: %w", err)
 	}
-	signup, err := routes.NewSignUp(pool, tokenConfig)
+	signup, err := routes.NewSignUpHandler(pool, tokenConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating signup usecase: %w", err)
@@ -72,7 +72,7 @@ func New(port string) (*App, error) {
 	}
 
 	pageConfig := page.NewPageConfig(1000)
-	newPage, err := routes.NewPage(pool, pageConfig)
+	newPage, err := routes.NewCreatePageHandler(pool, pageConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating page usecase: %w", err)

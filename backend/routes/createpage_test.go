@@ -22,7 +22,7 @@ func TestNewPage(t *testing.T) {
 	defer mock.Close()
 
 	pageConfig := page.NewPageConfig(10)
-	np, err := routes.NewPage(mock, pageConfig)
+	np, err := routes.NewCreatePageHandler(mock, pageConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

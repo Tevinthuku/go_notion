@@ -13,15 +13,15 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
-type UpdatePage struct {
+type UpdatePageHandler struct {
 	db db.DB
 }
 
-func NewUpdatePage(db db.DB) (*UpdatePage, error) {
+func NewUpdatePage(db db.DB) (*UpdatePageHandler, error) {
 	if db == nil {
 		return nil, fmt.Errorf("db cannot be nil")
 	}
-	return &UpdatePage{db}, nil
+	return &UpdatePageHandler{db}, nil
 }
 
 type UpdatePageUri struct {
@@ -35,7 +35,7 @@ type UpdatePageInput struct {
 	RawContent  json.RawMessage `json:"raw_content"`
 }
 
-func (up *UpdatePage) UpdatePage(c *gin.Context) {
+func (up *UpdatePageHandler) UpdatePage(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 	defer cancel()
 
@@ -79,6 +79,6 @@ func (up *UpdatePage) UpdatePage(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "page updated successfully"})
 }
 
-func (up *UpdatePage) RegisterRoutes(router *gin.RouterGroup) {
+func (up *UpdatePageHandler) RegisterRoutes(router *gin.RouterGroup) {
 	router.PUT("/pages/:id", up.UpdatePage)
 }
