@@ -1,9 +1,9 @@
-package usecase_test
+package routes_test
 
 import (
 	"encoding/json"
 	"go_notion/backend/router"
-	"go_notion/backend/usecase"
+	"go_notion/backend/routes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,7 +22,7 @@ func TestUpdatePage(t *testing.T) {
 	}
 	defer mock.Close()
 
-	updatePage, err := usecase.NewUpdatePageUseCase(mock)
+	updatePage, err := routes.NewUpdatePage(mock)
 	if err != nil {
 		t.Fatal(err)
 	}

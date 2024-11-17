@@ -1,9 +1,9 @@
-package usecase_test
+package routes_test
 
 import (
 	"go_notion/backend/mocks"
 	"go_notion/backend/router"
-	"go_notion/backend/usecase"
+	"go_notion/backend/routes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -61,7 +61,7 @@ func TestSignUp(t *testing.T) {
 			}
 
 			tokenGenerator := &mocks.TokenGeneratorMock{}
-			signUp, err := usecase.NewSignUp(mock, tokenGenerator)
+			signUp, err := routes.NewSignUp(mock, tokenGenerator)
 			if err != nil {
 				t.Fatal(err)
 			}

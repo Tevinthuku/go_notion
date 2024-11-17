@@ -1,4 +1,4 @@
-package usecase
+package routes
 
 import (
 	"context"
@@ -17,7 +17,7 @@ type UpdatePage struct {
 	db db.DB
 }
 
-func NewUpdatePageUseCase(db db.DB) (*UpdatePage, error) {
+func NewUpdatePage(db db.DB) (*UpdatePage, error) {
 	if db == nil {
 		return nil, fmt.Errorf("db cannot be nil")
 	}

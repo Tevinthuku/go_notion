@@ -1,9 +1,9 @@
-package usecase_test
+package routes_test
 
 import (
 	"go_notion/backend/page"
 	"go_notion/backend/router"
-	"go_notion/backend/usecase"
+	"go_notion/backend/routes"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -22,7 +22,7 @@ func TestNewPage(t *testing.T) {
 	defer mock.Close()
 
 	pageConfig := page.NewPageConfig(10)
-	np, err := usecase.NewPageUseCase(mock, pageConfig)
+	np, err := routes.NewPage(mock, pageConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

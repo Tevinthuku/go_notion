@@ -1,4 +1,4 @@
-package usecase
+package routes
 
 import (
 	"context"

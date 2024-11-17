@@ -7,7 +7,7 @@ import (
 	"go_notion/backend/db"
 	"go_notion/backend/page"
 	"go_notion/backend/router"
-	"go_notion/backend/usecase"
+	"go_notion/backend/routes"
 	"log"
 	"net/http"
 	"os"
@@ -17,7 +17,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type UseCase interface {
+type Routes interface {
 	RegisterRoutes(router *gin.RouterGroup)
 }
 
@@ -54,12 +54,12 @@ func New(port string) (*App, error) {
 	}
 	app.tokenConfig = tokenConfig
 
-	signin, err := usecase.NewSignIn(pool, tokenConfig)
+	signin, err := routes.NewSignIn(pool, tokenConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating signin usecase: %w", err)
 	}
-	signup, err := usecase.NewSignUp(pool, tokenConfig)
+	signup, err := routes.NewSignUp(pool, tokenConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating signup usecase: %w", err)
@@ -67,28 +67,28 @@ func New(port string) (*App, error) {
 
 	// public routes
 	apiv1 := appRouter.Group("/api/v1")
-	for _, usecase := range []UseCase{signup, signin} {
-		usecase.RegisterRoutes(apiv1)
+	for _, r := range []Routes{signup, signin} {
+		r.RegisterRoutes(apiv1)
 	}
 
 	pageConfig := page.NewPageConfig(1000)
-	newPage, err := usecase.NewPageUseCase(pool, pageConfig)
+	newPage, err := routes.NewPage(pool, pageConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating page usecase: %w", err)
 	}
 
-	updatePage, err := usecase.NewUpdatePageUseCase(pool)
+	updatePage, err := routes.NewUpdatePage(pool)
 	if err != nil {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating update page usecase: %w", err)
 	}
 
 	// protected routes
-	protectedUsecases := []UseCase{newPage, updatePage}
+	protectedRoutes := []Routes{newPage, updatePage}
 	protectedApiGroup := apiv1.Group("", tokenConfig.AuthMiddleware())
-	for _, usecase := range protectedUsecases {
-		usecase.RegisterRoutes(protectedApiGroup)
+	for _, r := range protectedRoutes {
+		r.RegisterRoutes(protectedApiGroup)
 	}
 
 	return app, nil

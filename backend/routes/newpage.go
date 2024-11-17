@@ -1,4 +1,4 @@
-package usecase
+package routes
 
 import (
 	"context"
@@ -14,22 +14,22 @@ import (
 	"github.com/gofrs/uuid/v5"
 )
 
-type NewPage struct {
+type NewPageContext struct {
 	db         db.DB
 	pageConfig *page.PageConfig
 }
 
-func NewPageUseCase(db db.DB, pageConfig *page.PageConfig) (*NewPage, error) {
+func NewPage(db db.DB, pageConfig *page.PageConfig) (*NewPageContext, error) {
 	if db == nil {
 		return nil, fmt.Errorf("db cannot be nil")
 	}
 	if pageConfig == nil {
 		return nil, fmt.Errorf("page config cannot be nil")
 	}
-	return &NewPage{db, pageConfig}, nil
+	return &NewPageContext{db, pageConfig}, nil
 }
 
-func (np *NewPage) CreatePage(c *gin.Context) {
+func (np *NewPageContext) CreatePage(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 	defer cancel()
 
@@ -64,6 +64,6 @@ func (np *NewPage) CreatePage(c *gin.Context) {
 
 }
 
-func (np *NewPage) RegisterRoutes(router *gin.RouterGroup) {
+func (np *NewPageContext) RegisterRoutes(router *gin.RouterGroup) {
 	router.POST("/pages", np.CreatePage)
 }
