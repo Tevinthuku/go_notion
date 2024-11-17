@@ -1,4 +1,4 @@
-package routes
+package handlers
 
 import (
 	"context"
@@ -18,7 +18,7 @@ type SignInHandler struct {
 	tokenGenerator authtoken.TokenGenerator
 }
 
-func NewSignIn(db db.DB, tokenGenerator authtoken.TokenGenerator) (*SignInHandler, error) {
+func NewSignInHandler(db db.DB, tokenGenerator authtoken.TokenGenerator) (*SignInHandler, error) {
 	if db == nil || tokenGenerator == nil {
 		return nil, fmt.Errorf("db and tokenGenerator cannot be nil")
 	}

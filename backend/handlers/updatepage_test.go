@@ -1,9 +1,9 @@
-package routes_test
+package handlers_test
 
 import (
 	"encoding/json"
+	"go_notion/backend/handlers"
 	"go_notion/backend/router"
-	"go_notion/backend/routes"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -22,7 +22,7 @@ func TestUpdatePage(t *testing.T) {
 	}
 	defer mock.Close()
 
-	updatePage, err := routes.NewUpdatePage(mock)
+	updatePage, err := handlers.NewUpdatePageHandler(mock)
 	if err != nil {
 		t.Fatal(err)
 	}

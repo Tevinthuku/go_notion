@@ -1,9 +1,9 @@
-package routes_test
+package handlers_test
 
 import (
+	"go_notion/backend/handlers"
 	"go_notion/backend/page"
 	"go_notion/backend/router"
-	"go_notion/backend/routes"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -22,7 +22,7 @@ func TestNewPage(t *testing.T) {
 	defer mock.Close()
 
 	pageConfig := page.NewPageConfig(10)
-	np, err := routes.NewCreatePageHandler(mock, pageConfig)
+	np, err := handlers.NewCreatePageHandler(mock, pageConfig)
 	if err != nil {
 		t.Fatal(err)
 	}

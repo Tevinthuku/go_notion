@@ -1,4 +1,4 @@
-package routes
+package handlers
 
 import (
 	"context"
@@ -17,7 +17,7 @@ type UpdatePageHandler struct {
 	db db.DB
 }
 
-func NewUpdatePage(db db.DB) (*UpdatePageHandler, error) {
+func NewUpdatePageHandler(db db.DB) (*UpdatePageHandler, error) {
 	if db == nil {
 		return nil, fmt.Errorf("db cannot be nil")
 	}

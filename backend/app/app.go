@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"go_notion/backend/authtoken"
 	"go_notion/backend/db"
+	"go_notion/backend/handlers"
 	"go_notion/backend/page"
 	"go_notion/backend/router"
-	"go_notion/backend/routes"
 	"log"
 	"net/http"
 	"os"
@@ -17,7 +17,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type Routes interface {
+type Handler interface {
 	RegisterRoutes(router *gin.RouterGroup)
 }
 
@@ -54,12 +54,12 @@ func New(port string) (*App, error) {
 	}
 	app.tokenConfig = tokenConfig
 
-	signin, err := routes.NewSignIn(pool, tokenConfig)
+	signin, err := handlers.NewSignInHandler(pool, tokenConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating signin usecase: %w", err)
 	}
-	signup, err := routes.NewSignUpHandler(pool, tokenConfig)
+	signup, err := handlers.NewSignUpHandler(pool, tokenConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating signup usecase: %w", err)
@@ -67,25 +67,25 @@ func New(port string) (*App, error) {
 
 	// public routes
 	apiv1 := appRouter.Group("/api/v1")
-	for _, r := range []Routes{signup, signin} {
+	for _, r := range []Handler{signup, signin} {
 		r.RegisterRoutes(apiv1)
 	}
 
 	pageConfig := page.NewPageConfig(1000)
-	newPage, err := routes.NewCreatePageHandler(pool, pageConfig)
+	newPage, err := handlers.NewCreatePageHandler(pool, pageConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating page usecase: %w", err)
 	}
 
-	updatePage, err := routes.NewUpdatePage(pool)
+	updatePage, err := handlers.NewUpdatePageHandler(pool)
 	if err != nil {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating update page usecase: %w", err)
 	}
 
 	// protected routes
-	protectedRoutes := []Routes{newPage, updatePage}
+	protectedRoutes := []Handler{newPage, updatePage}
 	protectedApiGroup := apiv1.Group("", tokenConfig.AuthMiddleware())
 	for _, r := range protectedRoutes {
 		r.RegisterRoutes(protectedApiGroup)
