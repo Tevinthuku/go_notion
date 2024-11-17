@@ -33,7 +33,7 @@ func TestUpdatePage(t *testing.T) {
 	}
 
 	mock.ExpectExec(`
-		UPDATE pages SET text_title = \$1, text_content = \$2, raw_title = \$3, raw_content = \$4 WHERE id = \$5 AND created_by = \$6
+		UPDATE pages SET text_title = \$1, text_content = \$2, title = \$3, content = \$4 WHERE id = \$5 AND created_by = \$6
 	`).WithArgs("title", "content", json.RawMessage(`{"data": "title"}`), json.RawMessage(`{"data": "content"}`), pageID, int64(1)).WillReturnResult(pgxmock.NewResult("UPDATE", 1))
 
 	r := router.NewRouter()
