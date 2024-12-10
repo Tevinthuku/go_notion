@@ -84,8 +84,14 @@ func New(port string) (*App, error) {
 		return nil, fmt.Errorf("error creating update page usecase: %w", err)
 	}
 
+	deletePage, err := handlers.NewDeletePageHandler(pool)
+	if err != nil {
+		app.Shutdown(context.Background())
+		return nil, fmt.Errorf("error creating delete page usecase: %w", err)
+	}
+
 	// protected routes
-	protectedRoutes := []Handler{newPage, updatePage}
+	protectedRoutes := []Handler{newPage, updatePage, deletePage}
 	protectedApiGroup := apiv1.Group("", tokenConfig.AuthMiddleware())
 	for _, r := range protectedRoutes {
 		r.RegisterRoutes(protectedApiGroup)
