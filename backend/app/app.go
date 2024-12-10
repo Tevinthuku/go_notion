@@ -57,12 +57,12 @@ func New(port string) (*App, error) {
 	signin, err := handlers.NewSignInHandler(pool, tokenConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
-		return nil, fmt.Errorf("error creating signin usecase: %w", err)
+		return nil, fmt.Errorf("error creating signin handler: %w", err)
 	}
 	signup, err := handlers.NewSignUpHandler(pool, tokenConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
-		return nil, fmt.Errorf("error creating signup usecase: %w", err)
+		return nil, fmt.Errorf("error creating signup handler: %w", err)
 	}
 
 	// public routes
@@ -75,19 +75,19 @@ func New(port string) (*App, error) {
 	newPage, err := handlers.NewCreatePageHandler(pool, pageConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
-		return nil, fmt.Errorf("error creating page usecase: %w", err)
+		return nil, fmt.Errorf("error creating page handler: %w", err)
 	}
 
 	updatePage, err := handlers.NewUpdatePageHandler(pool)
 	if err != nil {
 		app.Shutdown(context.Background())
-		return nil, fmt.Errorf("error creating update page usecase: %w", err)
+		return nil, fmt.Errorf("error creating update page handler: %w", err)
 	}
 
 	deletePage, err := handlers.NewDeletePageHandler(pool)
 	if err != nil {
 		app.Shutdown(context.Background())
-		return nil, fmt.Errorf("error creating delete page usecase: %w", err)
+		return nil, fmt.Errorf("error creating delete page handler: %w", err)
 	}
 
 	// protected routes
