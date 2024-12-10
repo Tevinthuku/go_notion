@@ -44,10 +44,6 @@ func TestDeletePage(t *testing.T) {
 
 	c, _ := gin.CreateTestContext(w)
 
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	c.Request, _ = http.NewRequest("DELETE", "/api/pages/"+pageID.String(), nil)
 
 	r.ServeHTTP(w, c.Request)

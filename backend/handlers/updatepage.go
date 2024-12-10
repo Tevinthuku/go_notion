@@ -45,6 +45,12 @@ func (up *UpdatePageHandler) UpdatePage(c *gin.Context) {
 		return
 	}
 
+	userIdInt, ok := userID.(int64)
+	if !ok {
+		c.Error(api_error.NewUnauthorizedError("not authorized to update page", fmt.Errorf("user id is not an integer")))
+		return
+	}
+
 	var uri UpdatePageUri
 	if err := c.ShouldBindUri(&uri); err != nil {
 		c.Error(api_error.NewBadRequestError(err.Error(), err))
@@ -65,7 +71,7 @@ func (up *UpdatePageHandler) UpdatePage(c *gin.Context) {
 
 	cmd, err := up.db.Exec(ctx, `
 		UPDATE pages SET text_title = $1, text_content = $2, title = $3, content = $4 WHERE id = $5 AND created_by = $6
-	`, input.TitleText, input.ContentText, input.RawTitle, input.RawContent, pageID, userID)
+	`, input.TitleText, input.ContentText, input.RawTitle, input.RawContent, pageID, userIdInt)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to update page", err))
 		return

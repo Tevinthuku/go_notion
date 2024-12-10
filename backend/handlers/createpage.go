@@ -39,11 +39,17 @@ func (np *CreatePageHandler) CreatePage(c *gin.Context) {
 		return
 	}
 
+	userIdInt, ok := userID.(int64)
+	if !ok {
+		c.Error(api_error.NewUnauthorizedError("not authorized to create page", fmt.Errorf("user id is not an integer")))
+		return
+	}
+
 	var position float64
 
 	err := np.db.QueryRow(ctx, `
 		SELECT COALESCE(MAX(position), 0) FROM pages WHERE created_by = $1
-	`, userID).Scan(&position)
+	`, userIdInt).Scan(&position)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("internal server error", err))
 		return

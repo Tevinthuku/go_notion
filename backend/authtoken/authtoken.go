@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -81,9 +82,16 @@ func (tc *TokenConfig) extractUserID(c *gin.Context) (int64, error) {
 	if token == "" {
 		return 0, fmt.Errorf("no token provided")
 	}
-	token = token[len("Bearer "):]
+	const prefix = "Bearer "
+	if !strings.HasPrefix(token, prefix) {
+		return 0, fmt.Errorf("invalid token format")
+	}
+	token = token[len(prefix):]
 
 	parsedToken, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
 		return []byte(tc.tokenSecret), nil
 	})
 

@@ -37,6 +37,12 @@ func (dp *DeletePageHandler) DeletePage(c *gin.Context) {
 		return
 	}
 
+	userIdInt, ok := userID.(int64)
+	if !ok {
+		c.Error(api_error.NewUnauthorizedError("not authorized to delete page", fmt.Errorf("user id is not an integer")))
+		return
+	}
+
 	var uri DeletePageUri
 	if err := c.ShouldBindUri(&uri); err != nil {
 		c.Error(api_error.NewBadRequestError(err.Error(), err))
@@ -51,7 +57,7 @@ func (dp *DeletePageHandler) DeletePage(c *gin.Context) {
 
 	cmd, err := dp.db.Exec(ctx, `
 		DELETE FROM pages WHERE id = $1 AND created_by = $2
-	`, pageID, userID)
+	`, pageID, userIdInt)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to delete page", err))
 		return
