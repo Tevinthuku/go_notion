@@ -1,9 +1,9 @@
-package usecase_test
+package handlers_test
 
 import (
+	"go_notion/backend/handlers"
 	"go_notion/backend/mocks"
 	"go_notion/backend/router"
-	"go_notion/backend/usecase"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -33,7 +33,7 @@ func TestSignIn(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(test.userPassword), usecase.BcryptDevCost)
+			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(test.userPassword), handlers.BcryptDevCost)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -46,7 +46,7 @@ func TestSignIn(t *testing.T) {
 				WillReturnRows(pgxmock.NewRows([]string{"id", "password"}).AddRow(int64(1), hashedPasswordString))
 
 			tokenGenerator := &mocks.TokenGeneratorMock{}
-			signIn, err := usecase.NewSignIn(mock, tokenGenerator)
+			signIn, err := handlers.NewSignInHandler(mock, tokenGenerator)
 			if err != nil {
 				t.Fatal(err)
 			}

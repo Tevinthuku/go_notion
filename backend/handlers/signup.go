@@ -1,4 +1,4 @@
-package usecase
+package handlers
 
 import (
 	"context"
@@ -23,16 +23,16 @@ const (
 	BcryptProdCost = 12
 )
 
-type SignUp struct {
+type SignUpHandler struct {
 	db             db.DB
 	tokenGenerator authtoken.TokenGenerator
 }
 
-func NewSignUp(db db.DB, tokenGenerator authtoken.TokenGenerator) (*SignUp, error) {
+func NewSignUpHandler(db db.DB, tokenGenerator authtoken.TokenGenerator) (*SignUpHandler, error) {
 	if db == nil || tokenGenerator == nil {
 		return nil, fmt.Errorf("db and tokenGenerator cannot be nil")
 	}
-	return &SignUp{db, tokenGenerator}, nil
+	return &SignUpHandler{db, tokenGenerator}, nil
 }
 
 type SignUpInput struct {
@@ -41,7 +41,7 @@ type SignUpInput struct {
 	Password string `json:"password" binding:"required,min=5"`
 }
 
-func (s *SignUp) SignUp(c *gin.Context) {
+func (s *SignUpHandler) SignUp(c *gin.Context) {
 
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
@@ -127,6 +127,6 @@ func (s *SignUp) SignUp(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
-func (s *SignUp) RegisterRoutes(router *gin.RouterGroup) {
+func (s *SignUpHandler) RegisterRoutes(router *gin.RouterGroup) {
 	router.POST("/auth/signup", s.SignUp)
 }

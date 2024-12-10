@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"go_notion/backend/authtoken"
 	"go_notion/backend/db"
+	"go_notion/backend/handlers"
+	"go_notion/backend/page"
 	"go_notion/backend/router"
-	"go_notion/backend/usecase"
 	"log"
 	"net/http"
 	"os"
@@ -16,7 +17,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type UseCase interface {
+type Handler interface {
 	RegisterRoutes(router *gin.RouterGroup)
 }
 
@@ -53,22 +54,47 @@ func New(port string) (*App, error) {
 	}
 	app.tokenConfig = tokenConfig
 
-	signin, err := usecase.NewSignIn(pool, tokenConfig)
+	signin, err := handlers.NewSignInHandler(pool, tokenConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating signin usecase: %w", err)
 	}
-	signup, err := usecase.NewSignUp(pool, tokenConfig)
+	signup, err := handlers.NewSignUpHandler(pool, tokenConfig)
 	if err != nil {
 		app.Shutdown(context.Background())
 		return nil, fmt.Errorf("error creating signup usecase: %w", err)
 	}
 
-	usecases := []UseCase{signup, signin}
+	// public routes
+	apiv1 := appRouter.Group("/api/v1")
+	for _, r := range []Handler{signup, signin} {
+		r.RegisterRoutes(apiv1)
+	}
 
-	apiGroup := appRouter.Group("/api/v1")
-	for _, usecase := range usecases {
-		usecase.RegisterRoutes(apiGroup)
+	pageConfig := page.NewPageConfig(1000)
+	newPage, err := handlers.NewCreatePageHandler(pool, pageConfig)
+	if err != nil {
+		app.Shutdown(context.Background())
+		return nil, fmt.Errorf("error creating page usecase: %w", err)
+	}
+
+	updatePage, err := handlers.NewUpdatePageHandler(pool)
+	if err != nil {
+		app.Shutdown(context.Background())
+		return nil, fmt.Errorf("error creating update page usecase: %w", err)
+	}
+
+	deletePage, err := handlers.NewDeletePageHandler(pool)
+	if err != nil {
+		app.Shutdown(context.Background())
+		return nil, fmt.Errorf("error creating delete page usecase: %w", err)
+	}
+
+	// protected routes
+	protectedRoutes := []Handler{newPage, updatePage, deletePage}
+	protectedApiGroup := apiv1.Group("", tokenConfig.AuthMiddleware())
+	for _, r := range protectedRoutes {
+		r.RegisterRoutes(protectedApiGroup)
 	}
 
 	return app, nil
