@@ -38,7 +38,6 @@ func (np *CreatePageHandler) CreatePage(c *gin.Context) {
 		c.Error(api_error.NewUnauthorizedError("not authorized to create page", nil))
 		return
 	}
-
 	userIdInt, ok := userID.(int64)
 	if !ok {
 		c.Error(api_error.NewUnauthorizedError("not authorized to create page", fmt.Errorf("user id is not an integer")))
@@ -59,7 +58,7 @@ func (np *CreatePageHandler) CreatePage(c *gin.Context) {
 	position += float64(np.pageConfig.Spacing)
 	err = np.db.QueryRow(ctx, `
 		INSERT INTO pages (created_by, position) VALUES ($1, $2) RETURNING id
-	`, userID, position).Scan(&pageID)
+	`, userIdInt, position).Scan(&pageID)
 
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to create page", err))

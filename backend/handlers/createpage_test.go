@@ -27,35 +27,60 @@ func TestNewPage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mock.ExpectQuery(`
-		SELECT COALESCE\(MAX\(position\), 0\) FROM pages WHERE created_by = \$1
-	`).WithArgs(int64(1)).WillReturnRows(pgxmock.NewRows([]string{"coalesce"}).AddRow(float64(0)))
+	tests := []struct {
+		name           string
+		userID         any
+		setupMock      func(mock pgxmock.PgxPoolIface)
+		expectedStatus int
+	}{
+		{
+			name:   "successfully create page",
+			userID: int64(1),
+			setupMock: func(mock pgxmock.PgxPoolIface) {
+				uuid, err := uuid.NewV4()
+				if err != nil {
+					t.Fatal(err)
+				}
+				mock.ExpectQuery(`
+				SELECT COALESCE\(MAX\(position\), 0\) FROM pages WHERE created_by = \$1
+			`).WithArgs(int64(1)).WillReturnRows(pgxmock.NewRows([]string{"coalesce"}).AddRow(float64(0)))
 
-	uuid, err := uuid.NewV4()
-	if err != nil {
-		t.Fatal(err)
+				mock.ExpectQuery(`
+				INSERT INTO pages \(created_by, position\) VALUES \(\$1, \$2\) RETURNING id
+			`).WithArgs(int64(1), float64(pageConfig.Spacing)).WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(uuid))
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:   "invalid user id",
+			userID: "invalid",
+			setupMock: func(mock pgxmock.PgxPoolIface) {
+			},
+			expectedStatus: http.StatusUnauthorized,
+		},
 	}
-	mock.ExpectQuery(`
-		INSERT INTO pages \(created_by, position\) VALUES \(\$1, \$2\) RETURNING id
-	`).WithArgs(int64(1), float64(pageConfig.Spacing)).WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(uuid))
 
-	r := router.NewRouter()
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			mock.Reset()
+			test.setupMock(mock)
 
-	// Setup route with middleware that would normally set user_id
-	r.POST("/api/pages", func(c *gin.Context) {
-		// Simulate middleware
-		c.Set("user_id", int64(1))
+			r := router.NewRouter()
+			// Setup route with middleware that would normally set user_id
+			r.POST("/api/pages", func(c *gin.Context) {
+				c.Set("user_id", test.userID)
+				np.CreatePage(c)
+			})
 
-		np.CreatePage(c)
-	})
+			w := httptest.NewRecorder()
 
-	w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
 
-	c, _ := gin.CreateTestContext(w)
+			req, _ := http.NewRequestWithContext(c, "POST", "/api/pages", nil)
 
-	req, _ := http.NewRequestWithContext(c, "POST", "/api/pages", nil)
+			r.ServeHTTP(w, req)
 
-	r.ServeHTTP(w, req)
-
-	assert.Equal(t, http.StatusOK, w.Code)
+			assert.Equal(t, test.expectedStatus, w.Code)
+		})
+	}
 }
