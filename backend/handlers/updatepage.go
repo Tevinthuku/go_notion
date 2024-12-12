@@ -29,10 +29,10 @@ type UpdatePageUri struct {
 }
 
 type UpdatePageInput struct {
-	TitleText   string          `json:"title_text"`
-	ContentText string          `json:"content_text"`
-	RawTitle    json.RawMessage `json:"raw_title"`
-	RawContent  json.RawMessage `json:"raw_content"`
+	TitleText   string          `json:"title_text" binding:"required"`
+	ContentText string          `json:"content_text" binding:"required"`
+	RawTitle    json.RawMessage `json:"raw_title" binding:"required"`
+	RawContent  json.RawMessage `json:"raw_content" binding:"required"`
 }
 
 func (up *UpdatePageHandler) UpdatePage(c *gin.Context) {
