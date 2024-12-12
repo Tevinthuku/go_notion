@@ -25,10 +25,10 @@ type App struct {
 	pool        *pgxpool.Pool
 	server      *http.Server
 	tokenConfig *authtoken.TokenConfig
+	pageConfig  *page.PageConfig
 }
 
 func New(port string) (*App, error) {
-	app := &App{}
 	err := loadEnv()
 	if err != nil {
 		return nil, fmt.Errorf("error loading .env file: %w", err)
@@ -37,7 +37,7 @@ func New(port string) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to create database pool: %w", err)
 	}
-
+	app := &App{}
 	app.pool = pool
 
 	appRouter := router.NewRouter()
@@ -53,16 +53,24 @@ func New(port string) (*App, error) {
 		return nil, fmt.Errorf("error creating token config: %w", err)
 	}
 	app.tokenConfig = tokenConfig
-
-	signin, err := handlers.NewSignInHandler(pool, tokenConfig)
+	app.pageConfig = page.NewPageConfig(1000)
+	err = app.registerHandlers(appRouter)
 	if err != nil {
 		app.Shutdown(context.Background())
-		return nil, fmt.Errorf("error creating signin handler: %w", err)
+		return nil, fmt.Errorf("error registering routes: %w", err)
 	}
-	signup, err := handlers.NewSignUpHandler(pool, tokenConfig)
+
+	return app, nil
+}
+
+func (app *App) registerHandlers(appRouter *gin.Engine) error {
+	signin, err := handlers.NewSignInHandler(app.pool, app.tokenConfig)
 	if err != nil {
-		app.Shutdown(context.Background())
-		return nil, fmt.Errorf("error creating signup handler: %w", err)
+		return fmt.Errorf("error creating signin handler: %w", err)
+	}
+	signup, err := handlers.NewSignUpHandler(app.pool, app.tokenConfig)
+	if err != nil {
+		return fmt.Errorf("error creating signup handler: %w", err)
 	}
 
 	// public routes
@@ -71,33 +79,29 @@ func New(port string) (*App, error) {
 		r.RegisterRoutes(apiv1)
 	}
 
-	pageConfig := page.NewPageConfig(1000)
-	newPage, err := handlers.NewCreatePageHandler(pool, pageConfig)
+	newPage, err := handlers.NewCreatePageHandler(app.pool, app.pageConfig)
 	if err != nil {
-		app.Shutdown(context.Background())
-		return nil, fmt.Errorf("error creating page handler: %w", err)
+		return fmt.Errorf("error creating page handler: %w", err)
 	}
 
-	updatePage, err := handlers.NewUpdatePageHandler(pool)
+	updatePage, err := handlers.NewUpdatePageHandler(app.pool)
 	if err != nil {
-		app.Shutdown(context.Background())
-		return nil, fmt.Errorf("error creating update page handler: %w", err)
+		return fmt.Errorf("error creating update page handler: %w", err)
 	}
 
-	deletePage, err := handlers.NewDeletePageHandler(pool)
+	deletePage, err := handlers.NewDeletePageHandler(app.pool)
 	if err != nil {
-		app.Shutdown(context.Background())
-		return nil, fmt.Errorf("error creating delete page handler: %w", err)
+		return fmt.Errorf("error creating delete page handler: %w", err)
 	}
 
 	// protected routes
 	protectedRoutes := []Handler{newPage, updatePage, deletePage}
-	protectedApiGroup := apiv1.Group("", tokenConfig.AuthMiddleware())
+	protectedApiGroup := apiv1.Group("", app.tokenConfig.AuthMiddleware())
 	for _, r := range protectedRoutes {
 		r.RegisterRoutes(protectedApiGroup)
 	}
 
-	return app, nil
+	return nil
 }
 
 func (app *App) Run() error {
