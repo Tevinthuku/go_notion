@@ -98,10 +98,6 @@ func TestUpdatePage(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			c, _ := gin.CreateTestContext(w)
-
-			if err != nil {
-				t.Fatal(err)
-			}
 			c.Request, _ = http.NewRequest("PUT", "/api/pages/"+test.getPageID(), strings.NewReader(test.body))
 
 			r.ServeHTTP(w, c.Request)
