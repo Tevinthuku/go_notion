@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"go_notion/backend/authtoken"
 	"go_notion/backend/db"
@@ -49,14 +50,19 @@ func New(port string) (*App, error) {
 	app.server = server
 	tokenConfig, err := authtoken.NewTokenConfig()
 	if err != nil {
-		app.Shutdown(context.Background())
+		if shutdownErr := app.Shutdown(context.Background()); shutdownErr != nil {
+			return nil, fmt.Errorf("multiple errors: %w", errors.Join(err, shutdownErr))
+		}
 		return nil, fmt.Errorf("error creating token config: %w", err)
 	}
 	app.tokenConfig = tokenConfig
 	app.pageConfig = page.NewPageConfig(1000)
 	err = app.registerHandlers(appRouter)
 	if err != nil {
-		app.Shutdown(context.Background())
+		if shutdownErr := app.Shutdown(context.Background()); shutdownErr != nil {
+			return nil, fmt.Errorf("multiple errors: %w", errors.Join(err, shutdownErr))
+		}
+
 		return nil, fmt.Errorf("error registering routes: %w", err)
 	}
 
