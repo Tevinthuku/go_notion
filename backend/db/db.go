@@ -9,7 +9,10 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+
+	pgxuuid "github.com/jackc/pgx-gofrs-uuid"
 )
 
 func Run() (*pgxpool.Pool, error) {
@@ -34,6 +37,12 @@ func Run() (*pgxpool.Pool, error) {
 	config.MaxConnLifetime = 1 * time.Hour
 	config.MaxConnIdleTime = 30 * time.Minute
 	config.HealthCheckPeriod = 1 * time.Minute
+
+	config.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
+		pgxuuid.Register(conn.TypeMap())
+		return nil
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
@@ -53,4 +62,5 @@ func Run() (*pgxpool.Pool, error) {
 type DB interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
+	Exec(ctx context.Context, sql string, arguments ...any) (commandTag pgconn.CommandTag, err error)
 }

@@ -1,4 +1,4 @@
-package usecase
+package handlers
 
 import (
 	"context"
@@ -13,16 +13,16 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type SignIn struct {
+type SignInHandler struct {
 	db             db.DB
 	tokenGenerator authtoken.TokenGenerator
 }
 
-func NewSignIn(db db.DB, tokenGenerator authtoken.TokenGenerator) (*SignIn, error) {
+func NewSignInHandler(db db.DB, tokenGenerator authtoken.TokenGenerator) (*SignInHandler, error) {
 	if db == nil || tokenGenerator == nil {
 		return nil, fmt.Errorf("db and tokenGenerator cannot be nil")
 	}
-	return &SignIn{db, tokenGenerator}, nil
+	return &SignInHandler{db, tokenGenerator}, nil
 }
 
 type SignInInput struct {
@@ -30,7 +30,7 @@ type SignInInput struct {
 	Password string `json:"password" binding:"required,min=5"`
 }
 
-func (s *SignIn) SignIn(c *gin.Context) {
+func (s *SignInHandler) SignIn(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
 
@@ -65,6 +65,6 @@ func (s *SignIn) SignIn(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"token": token})
 }
 
-func (s *SignIn) RegisterRoutes(router *gin.RouterGroup) {
+func (s *SignInHandler) RegisterRoutes(router *gin.RouterGroup) {
 	router.POST("/auth/signin", s.SignIn)
 }

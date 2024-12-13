@@ -2,11 +2,13 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"go_notion/backend/authtoken"
 	"go_notion/backend/db"
+	"go_notion/backend/handlers"
+	"go_notion/backend/page"
 	"go_notion/backend/router"
-	"go_notion/backend/usecase"
 	"log"
 	"net/http"
 	"os"
@@ -16,7 +18,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-type UseCase interface {
+type Handler interface {
 	RegisterRoutes(router *gin.RouterGroup)
 }
 
@@ -24,10 +26,10 @@ type App struct {
 	pool        *pgxpool.Pool
 	server      *http.Server
 	tokenConfig *authtoken.TokenConfig
+	pageConfig  *page.PageConfig
 }
 
 func New(port string) (*App, error) {
-	app := &App{}
 	err := loadEnv()
 	if err != nil {
 		return nil, fmt.Errorf("error loading .env file: %w", err)
@@ -36,7 +38,7 @@ func New(port string) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to create database pool: %w", err)
 	}
-
+	app := &App{}
 	app.pool = pool
 
 	appRouter := router.NewRouter()
@@ -48,30 +50,64 @@ func New(port string) (*App, error) {
 	app.server = server
 	tokenConfig, err := authtoken.NewTokenConfig()
 	if err != nil {
-		app.Shutdown(context.Background())
+		if shutdownErr := app.Shutdown(context.Background()); shutdownErr != nil {
+			return nil, fmt.Errorf("multiple errors: %w", errors.Join(err, shutdownErr))
+		}
 		return nil, fmt.Errorf("error creating token config: %w", err)
 	}
 	app.tokenConfig = tokenConfig
-
-	signin, err := usecase.NewSignIn(pool, tokenConfig)
+	app.pageConfig = page.NewPageConfig(1000)
+	err = app.registerHandlers(appRouter)
 	if err != nil {
-		app.Shutdown(context.Background())
-		return nil, fmt.Errorf("error creating signin usecase: %w", err)
-	}
-	signup, err := usecase.NewSignUp(pool, tokenConfig)
-	if err != nil {
-		app.Shutdown(context.Background())
-		return nil, fmt.Errorf("error creating signup usecase: %w", err)
-	}
+		if shutdownErr := app.Shutdown(context.Background()); shutdownErr != nil {
+			return nil, fmt.Errorf("multiple errors: %w", errors.Join(err, shutdownErr))
+		}
 
-	usecases := []UseCase{signup, signin}
-
-	apiGroup := appRouter.Group("/api/v1")
-	for _, usecase := range usecases {
-		usecase.RegisterRoutes(apiGroup)
+		return nil, fmt.Errorf("error registering routes: %w", err)
 	}
 
 	return app, nil
+}
+
+func (app *App) registerHandlers(appRouter *gin.Engine) error {
+	signin, err := handlers.NewSignInHandler(app.pool, app.tokenConfig)
+	if err != nil {
+		return fmt.Errorf("error creating signin handler: %w", err)
+	}
+	signup, err := handlers.NewSignUpHandler(app.pool, app.tokenConfig)
+	if err != nil {
+		return fmt.Errorf("error creating signup handler: %w", err)
+	}
+
+	// public routes
+	apiv1 := appRouter.Group("/api/v1")
+	for _, r := range []Handler{signup, signin} {
+		r.RegisterRoutes(apiv1)
+	}
+
+	newPage, err := handlers.NewCreatePageHandler(app.pool, app.pageConfig)
+	if err != nil {
+		return fmt.Errorf("error creating page handler: %w", err)
+	}
+
+	updatePage, err := handlers.NewUpdatePageHandler(app.pool)
+	if err != nil {
+		return fmt.Errorf("error creating update page handler: %w", err)
+	}
+
+	deletePage, err := handlers.NewDeletePageHandler(app.pool)
+	if err != nil {
+		return fmt.Errorf("error creating delete page handler: %w", err)
+	}
+
+	// protected routes
+	protectedRoutes := []Handler{newPage, updatePage, deletePage}
+	protectedApiGroup := apiv1.Group("", app.tokenConfig.AuthMiddleware())
+	for _, r := range protectedRoutes {
+		r.RegisterRoutes(protectedApiGroup)
+	}
+
+	return nil
 }
 
 func (app *App) Run() error {
