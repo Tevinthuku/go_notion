@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS pages (
     CONSTRAINT position_check CHECK (position >= 0)
 );
 
-COMMENT ON COLUMN pages.position IS 'Determines the order of pages. Floating point allows for inserting pages between existing ones.'
+COMMENT ON COLUMN pages.position IS 'Determines the order of pages. Floating point allows for inserting pages between existing ones.';
 
 
 CREATE INDEX ON pages (created_by);
