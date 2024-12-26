@@ -3,19 +3,12 @@
 1. Useful tools to install
 
 - Migrate CLI - https://github.com/golang-migrate/migrate/tree/master/cmd/migrate
+- Just - https://github.com/casey/just
 
-2. Run docker compose file
-
-```bash
-docker compose up -d
-```
-
-3. Running the migrations
-
-In the `backend` directory, run:
+2. Running the backend tests:
 
 ```bash
-migrate -path db/migrations/sql -database "your_database_url" up
+just backend_test
 ```
 
 ## Contributing:
