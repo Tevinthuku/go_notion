@@ -17,8 +17,8 @@ jobs:
       postgres:
         image: postgres:15
         env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: ${{ secrets.DB_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
           POSTGRES_DB: notion_test
         ports:
           - 5432:5432
@@ -43,7 +43,7 @@ jobs:
           which migrate
 
       - name: Run migrations
-        run: migrate -path ./backend/db/migrations/sql -database "postgres://postgres:postgres@localhost:5432/notion_test?sslmode=disable" up
+        run: migrate -path ./backend/db/migrations/sql -database "postgres://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/notion_test?sslmode=disable" up
 
       - name: Build
         run: go build -v ./backend/...
@@ -51,4 +51,4 @@ jobs:
       - name: Test
         run: go test -v ./backend/...
         env:
-          TEST_DATABASE_URL: "postgres://postgres:postgres@localhost:5432/notion_test?sslmode=disable"
+          TEST_DATABASE_URL: "postgres://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/notion_test?sslmode=disable"
