@@ -9,9 +9,11 @@ CREATE TABLE IF NOT EXISTS pages (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by INTEGER REFERENCES users(id),
     position FLOAT NOT NULL DEFAULT 0,
-    CONSTRAINT position_check CHECK (position >= 0),
-    COMMENT ON COLUMN pages.position IS 'Determines the order of pages. Floating point allows for inserting pages between existing ones.'
+    CONSTRAINT position_check CHECK (position >= 0)
 );
+
+COMMENT ON COLUMN pages.position IS 'Determines the order of pages. Floating point allows for inserting pages between existing ones.';
+
 
 CREATE INDEX ON pages (created_by);
 
