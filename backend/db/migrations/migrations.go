@@ -13,8 +13,11 @@ import (
 )
 
 func Run(dbURL string) error {
+	return RunInner(dbURL, "backend/db/migrations/sql", "go_notion")
+}
 
-	db, err := sql.Open("pgx", dbURL)
+func RunInner(dbUrl string, migrationsDir string, dbName string) error {
+	db, err := sql.Open("pgx", dbUrl)
 	if err != nil {
 		return fmt.Errorf("unable to create database: %w", err)
 	}
@@ -26,8 +29,8 @@ func Run(dbURL string) error {
 	}
 
 	m, err := migrate.NewWithDatabaseInstance(
-		"file://backend/db/migrations/sql",
-		"go_notion",
+		"file://"+migrationsDir,
+		dbName,
 		driver,
 	)
 	if err != nil {
