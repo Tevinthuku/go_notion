@@ -3,24 +3,15 @@ package handlers_test
 import (
 	"context"
 	"fmt"
-	"go_notion/backend/db/migrations"
+	"go_notion/backend/db"
 	"go_notion/backend/handlers"
-	"os"
 	"slices"
 	"testing"
-
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestPageColumnsAreInSyncWithDb(t *testing.T) {
-	dbURL, _ := os.LookupEnv("DATABASE_URL")
-	fmt.Println(dbURL)
-	err := migrations.RunInner(dbURL, "../db/migrations/sql", "notion_test")
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	pool, err := pgxpool.New(context.Background(), dbURL)
+	pool, err := db.RunTestDb()
 	if err != nil {
 		t.Fatal(err)
 	}
