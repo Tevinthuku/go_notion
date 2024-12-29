@@ -18,8 +18,8 @@ import (
 	pgxuuid "github.com/jackc/pgx-gofrs-uuid"
 )
 
-func RunTestDb() (*pgxpool.Pool, error) {
-	return runInner(true)
+func RunTestDb(fixtures ...Fixture) (*pgxpool.Pool, error) {
+	return runInner(true, fixtures...)
 }
 
 func Run() (*pgxpool.Pool, error) {
@@ -32,8 +32,11 @@ func Run() (*pgxpool.Pool, error) {
 // Test mode is useful for isolated testing environments where each test can
 // have its own database instance.
 //
+// Fixtures are functions that are run after the database is created and migrations are applied.
+// They are useful for setting up the database with test data.
+//
 // Returns a connection pool and any error encountered during setup.
-func runInner(is_test_mode bool) (*pgxpool.Pool, error) {
+func runInner(is_test_mode bool, fixtures ...Fixture) (*pgxpool.Pool, error) {
 	// loading of env variables is done at app startup
 	dbURL, ok := os.LookupEnv("DATABASE_URL")
 	if !ok {
@@ -99,8 +102,16 @@ func runInner(is_test_mode bool) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("failed to verify database connection: %w", err)
 	}
 
+	for _, fixture := range fixtures {
+		if err := fixture(dbpool); err != nil {
+			return nil, fmt.Errorf("failed to run fixture: %w", err)
+		}
+	}
+
 	return dbpool, nil
 }
+
+type Fixture func(*pgxpool.Pool) error
 
 type DB interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row

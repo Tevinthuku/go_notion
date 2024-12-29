@@ -100,8 +100,13 @@ func (app *App) registerHandlers(appRouter *gin.Engine) error {
 		return fmt.Errorf("error creating delete page handler: %w", err)
 	}
 
+	duplicatePage, err := handlers.NewDuplicatePageHandler(app.pool, app.pageConfig)
+	if err != nil {
+		return fmt.Errorf("error creating duplicate page handler: %w", err)
+	}
+
 	// protected routes
-	protectedRoutes := []Handler{newPage, updatePage, deletePage}
+	protectedRoutes := []Handler{newPage, updatePage, deletePage, duplicatePage}
 	protectedApiGroup := apiv1.Group("", app.tokenConfig.AuthMiddleware())
 	for _, r := range protectedRoutes {
 		r.RegisterRoutes(protectedApiGroup)

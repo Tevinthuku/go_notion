@@ -62,6 +62,22 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		return
 	}
 
+	var exists bool
+	err = h.db.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT created_by FROM pages WHERE id = $1 AND created_by = $2
+		)
+	`, pageID, userIdInt).Scan(&exists)
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("error getting page to duplicate", err))
+		return
+	}
+
+	if !exists {
+		c.Error(api_error.NewNotFoundError("page not found", nil))
+		return
+	}
+
 	var position float64
 
 	err = h.db.QueryRow(ctx, `
@@ -95,4 +111,8 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{"message": "page duplicated successfully", "id": newPageID})
 
+}
+
+func (dp *DuplicatePageHandler) RegisterRoutes(router *gin.RouterGroup) {
+	router.POST("/pages/:id/duplicate", dp.DuplicatePage)
 }
