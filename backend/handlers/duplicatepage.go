@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"go_notion/backend/api_error"
 	"go_notion/backend/db"
@@ -62,12 +63,15 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		return
 	}
 
+	var pageTitle sql.NullString
 	var exists bool
 	err = h.db.QueryRow(ctx, `
-		SELECT EXISTS (
-			SELECT created_by FROM pages WHERE id = $1 AND created_by = $2
-		)
-	`, pageID, userIdInt).Scan(&exists)
+    SELECT EXISTS (
+        SELECT 1 FROM pages WHERE id = $1 AND created_by = $2
+    ), (
+		SELECT text_title FROM pages WHERE id = $1 AND created_by = $2
+	)
+	`, pageID, userIdInt).Scan(&exists, &pageTitle)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("error getting page to duplicate", err))
 		return
@@ -93,7 +97,7 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 	columnsToInsert := strings.Join(PageColumns, ", ")
 	columnsToSelect := strings.Join(PageColumns, ", ")
 	columnsToSelect = strings.ReplaceAll(columnsToSelect, "position", "$2")
-
+	columnsToSelect = strings.ReplaceAll(columnsToSelect, "text_title", "$3")
 	var newPageID uuid.UUID
 	query := fmt.Sprintf(`
 		INSERT INTO pages (%s)
@@ -103,7 +107,14 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		RETURNING id
 	`, columnsToInsert, columnsToSelect)
 
-	err = h.db.QueryRow(ctx, query, pageID, position).Scan(&newPageID)
+	var newPageTitle string
+	if pageTitle.Valid {
+		newPageTitle = fmt.Sprintf("Copy of - %s", pageTitle.String)
+	} else {
+		newPageTitle = "Copy"
+	}
+
+	err = h.db.QueryRow(ctx, query, pageID, position, newPageTitle).Scan(&newPageID)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
 		return
