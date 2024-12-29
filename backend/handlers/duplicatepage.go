@@ -2,6 +2,8 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"go_notion/backend/api_error"
 	"go_notion/backend/db"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 // maintaining this list is important to ensure that the query is updated when the schema changes.
@@ -62,25 +65,32 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		return
 	}
 
-	var exists bool
-	err = h.db.QueryRow(ctx, `
-		SELECT EXISTS (
-			SELECT created_by FROM pages WHERE id = $1 AND created_by = $2
-		)
-	`, pageID, userIdInt).Scan(&exists)
+	var pageTitle sql.NullString
+	var pageCreatedBy int64
+
+	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		c.Error(api_error.NewInternalServerError("error getting page to duplicate", err))
+		c.Error(api_error.NewInternalServerError("failed to begin transaction", err))
 		return
 	}
+	defer tx.Rollback(ctx)
 
-	if !exists {
+	err = tx.QueryRow(ctx, `
+		SELECT created_by, text_title FROM pages WHERE id = $1 AND created_by = $2
+	`, pageID, userIdInt).Scan(&pageCreatedBy, &pageTitle)
+
+	if errors.Is(err, pgx.ErrNoRows) {
 		c.Error(api_error.NewNotFoundError("page not found", nil))
 		return
 	}
 
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("error getting page to duplicate", err))
+		return
+	}
 	var position float64
 
-	err = h.db.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT COALESCE(MAX(position), 0) FROM pages WHERE created_by = $1
 	`, userIdInt).Scan(&position)
 	if err != nil {
@@ -90,10 +100,17 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 
 	position += float64(h.pageConfig.Spacing)
 
+	columnsToSelect := []string{}
+	for _, col := range PageColumns {
+		if col == "position" {
+			columnsToSelect = append(columnsToSelect, "$2")
+		} else if col == "text_title" {
+			columnsToSelect = append(columnsToSelect, "$3")
+		} else {
+			columnsToSelect = append(columnsToSelect, col)
+		}
+	}
 	columnsToInsert := strings.Join(PageColumns, ", ")
-	columnsToSelect := strings.Join(PageColumns, ", ")
-	columnsToSelect = strings.ReplaceAll(columnsToSelect, "position", "$2")
-
 	var newPageID uuid.UUID
 	query := fmt.Sprintf(`
 		INSERT INTO pages (%s)
@@ -101,10 +118,22 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		FROM pages 
 		WHERE id = $1
 		RETURNING id
-	`, columnsToInsert, columnsToSelect)
+	`, columnsToInsert, strings.Join(columnsToSelect, ", "))
 
-	err = h.db.QueryRow(ctx, query, pageID, position).Scan(&newPageID)
+	var newPageTitle string
+	if pageTitle.Valid {
+		newPageTitle = fmt.Sprintf("Copy of - %s", pageTitle.String)
+	} else {
+		newPageTitle = "Copy"
+	}
+
+	err = tx.QueryRow(ctx, query, pageID, position, newPageTitle).Scan(&newPageID)
 	if err != nil {
+		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
 		return
 	}
