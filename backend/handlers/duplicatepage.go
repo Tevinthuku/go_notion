@@ -96,12 +96,12 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 
 	var newPageID uuid.UUID
 	query := fmt.Sprintf(`
-    INSERT INTO pages (%s)
-    SELECT %s
-    FROM pages 
-    WHERE id = $1
-    RETURNING id
-`, columnsToInsert, columnsToSelect)
+		INSERT INTO pages (%s)
+		SELECT %s
+		FROM pages 
+		WHERE id = $1
+		RETURNING id
+	`, columnsToInsert, columnsToSelect)
 
 	err = h.db.QueryRow(ctx, query, pageID, position).Scan(&newPageID)
 	if err != nil {
