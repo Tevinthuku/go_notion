@@ -100,10 +100,17 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 
 	position += float64(h.pageConfig.Spacing)
 
+	columnsToSelect := []string{}
+	for _, col := range PageColumns {
+		if col == "position" {
+			columnsToSelect = append(columnsToSelect, "$2")
+		} else if col == "text_title" {
+			columnsToSelect = append(columnsToSelect, "$3")
+		} else {
+			columnsToSelect = append(columnsToSelect, col)
+		}
+	}
 	columnsToInsert := strings.Join(PageColumns, ", ")
-	columnsToSelect := strings.Join(PageColumns, ", ")
-	columnsToSelect = strings.ReplaceAll(columnsToSelect, "position", "$2")
-	columnsToSelect = strings.ReplaceAll(columnsToSelect, "text_title", "$3")
 	var newPageID uuid.UUID
 	query := fmt.Sprintf(`
 		INSERT INTO pages (%s)
@@ -111,7 +118,7 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		FROM pages 
 		WHERE id = $1
 		RETURNING id
-	`, columnsToInsert, columnsToSelect)
+	`, columnsToInsert, strings.Join(columnsToSelect, ", "))
 
 	var newPageTitle string
 	if pageTitle.Valid {
