@@ -5,11 +5,11 @@ import (
 	"fmt"
 
 	"github.com/gofrs/uuid/v5"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
 )
 
-func InsertTestUserFixture(pool *pgxpool.Pool) error {
-	_, err := pool.Exec(context.Background(), `
+func InsertTestUserFixture(conn *pgx.Conn) error {
+	_, err := conn.Exec(context.Background(), `
 		INSERT INTO users (email, username, password) VALUES ($1, $2, $3)
 	`, "test@test.com", "test", "test")
 	if err != nil {
@@ -19,8 +19,8 @@ func InsertTestUserFixture(pool *pgxpool.Pool) error {
 }
 
 func InsertTestPageFixture(page_id uuid.UUID, user_id int64) Fixture {
-	return func(pool *pgxpool.Pool) error {
-		_, err := pool.Exec(context.Background(), `
+	return func(conn *pgx.Conn) error {
+		_, err := conn.Exec(context.Background(), `
 			INSERT INTO pages (id, created_by) VALUES ($1, $2)
 		`, page_id, user_id)
 		return err

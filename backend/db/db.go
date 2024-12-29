@@ -102,16 +102,34 @@ func runInner(is_test_mode bool, fixtures ...Fixture) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("failed to verify database connection: %w", err)
 	}
 
-	for _, fixture := range fixtures {
-		if err := fixture(dbpool); err != nil {
-			return nil, fmt.Errorf("failed to run fixture: %w", err)
+	if len(fixtures) > 0 {
+		tx, err := dbpool.BeginTx(ctx, pgx.TxOptions{})
+
+		defer func() {
+			if err := tx.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
+				fmt.Println("failed to rollback transaction: %w", err)
+			}
+		}()
+		if err != nil {
+			return nil, fmt.Errorf("failed to begin transaction: %w", err)
+		}
+		conn := tx.Conn()
+
+		for _, fixture := range fixtures {
+			if err := fixture(conn); err != nil {
+				return nil, fmt.Errorf("failed to run fixture: %w", err)
+			}
+		}
+
+		if err := tx.Commit(ctx); err != nil {
+			return nil, fmt.Errorf("failed to commit transaction: %w", err)
 		}
 	}
 
 	return dbpool, nil
 }
 
-type Fixture func(*pgxpool.Pool) error
+type Fixture func(*pgx.Conn) error
 
 type DB interface {
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
