@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"go_notion/backend/api_error"
 	"go_notion/backend/db"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid/v5"
+	"github.com/jackc/pgx/v5"
 )
 
 // maintaining this list is important to ensure that the query is updated when the schema changes.
@@ -64,27 +66,31 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 	}
 
 	var pageTitle sql.NullString
-	var exists bool
-	err = h.db.QueryRow(ctx, `
-		SELECT EXISTS (
-			SELECT 1 FROM pages WHERE id = $1 AND created_by = $2
-		), (
-			SELECT text_title FROM pages WHERE id = $1 AND created_by = $2
-		)
-	`, pageID, userIdInt).Scan(&exists, &pageTitle)
+	var pageCreatedBy int64
+
+	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
-		c.Error(api_error.NewInternalServerError("error getting page to duplicate", err))
+		c.Error(api_error.NewInternalServerError("failed to begin transaction", err))
 		return
 	}
+	defer tx.Rollback(ctx)
 
-	if !exists {
+	err = tx.QueryRow(ctx, `
+		SELECT created_by, text_title FROM pages WHERE id = $1 AND created_by = $2
+	`, pageID, userIdInt).Scan(&pageCreatedBy, &pageTitle)
+
+	if errors.Is(err, pgx.ErrNoRows) {
 		c.Error(api_error.NewNotFoundError("page not found", nil))
 		return
 	}
 
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("error getting page to duplicate", err))
+		return
+	}
 	var position float64
 
-	err = h.db.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT COALESCE(MAX(position), 0) FROM pages WHERE created_by = $1
 	`, userIdInt).Scan(&position)
 	if err != nil {
@@ -114,8 +120,13 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		newPageTitle = "Copy"
 	}
 
-	err = h.db.QueryRow(ctx, query, pageID, position, newPageTitle).Scan(&newPageID)
+	err = tx.QueryRow(ctx, query, pageID, position, newPageTitle).Scan(&newPageID)
 	if err != nil {
+		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
 		return
 	}
