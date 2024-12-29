@@ -66,11 +66,11 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 	var pageTitle sql.NullString
 	var exists bool
 	err = h.db.QueryRow(ctx, `
-    SELECT EXISTS (
-        SELECT 1 FROM pages WHERE id = $1 AND created_by = $2
-    ), (
-		SELECT text_title FROM pages WHERE id = $1 AND created_by = $2
-	)
+		SELECT EXISTS (
+			SELECT 1 FROM pages WHERE id = $1 AND created_by = $2
+		), (
+			SELECT text_title FROM pages WHERE id = $1 AND created_by = $2
+		)
 	`, pageID, userIdInt).Scan(&exists, &pageTitle)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("error getting page to duplicate", err))
