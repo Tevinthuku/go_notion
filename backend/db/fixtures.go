@@ -22,8 +22,8 @@ func InsertTestUserFixture(conn *pgx.Conn) error {
 func InsertTestPageFixture(page_id uuid.UUID, user_id int64) Fixture {
 	return func(conn *pgx.Conn) error {
 		_, err := conn.Exec(context.Background(), `
-			INSERT INTO pages (id, created_by, position, text_title, text_content, title, content) VALUES ($1, $2, $3, $4, $5, $6, $7)
-		`, page_id, user_id, 1, "test", "test", json.RawMessage(`{"data": "test"}`), json.RawMessage(`{"data": "test"}`))
+			INSERT INTO pages (id, created_by, position, text_title, text_content, title, content, is_top_level) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`, page_id, user_id, 1, "test", "test", json.RawMessage(`{"data": "test"}`), json.RawMessage(`{"data": "test"}`), true)
 		return err
 	}
 }

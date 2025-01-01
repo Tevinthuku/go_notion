@@ -20,7 +20,7 @@ import (
 // maintaining this list is important to ensure that the query is updated when the schema changes.
 // we also have a test to ensure it is updated when the schema changes
 // this is a copy of the columns in the pages table, excluding id, created_at, and updated_at
-var PageColumns = []string{"created_by", "position", "text_title", "text_content", "title", "content"}
+var PageColumns = []string{"created_by", "position", "text_title", "text_content", "title", "content", "is_top_level"}
 
 type DuplicatePageHandler struct {
 	db         db.DB

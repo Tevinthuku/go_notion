@@ -49,9 +49,10 @@ func TestPageColumnsAreInSyncWithDb(t *testing.T) {
 	}
 
 	fmt.Println(columns)
-	for _, col := range handlers.PageColumns {
-		if !slices.Contains(columns, col) {
-			t.Errorf("column %s is missing from the pages table", col)
+
+	for _, col := range columns {
+		if !slices.Contains(handlers.PageColumns, col) {
+			t.Errorf("column %s is not in the PageColumns list", col)
 		}
 	}
 

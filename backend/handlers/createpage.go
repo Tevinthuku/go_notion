@@ -90,9 +90,26 @@ func (np *CreatePageHandler) CreatePage(c *gin.Context) {
 	}
 
 	if input.ParentID != nil {
+		parentIDValue := *input.ParentID // dereference to get the actual UUID
+		var parentPageBelongsToUser bool
+
+		err = tx.QueryRow(ctx, `
+			SELECT EXISTS(SELECT 1 FROM pages WHERE id = $1 AND created_by = $2)
+		`, parentIDValue, userIdInt).Scan(&parentPageBelongsToUser)
+
+		if err != nil {
+			c.Error(api_error.NewInternalServerError("failed to check if parent page exists", err))
+			return
+		}
+
+		if !parentPageBelongsToUser {
+			c.Error(api_error.NewNotFoundError("parent page not found", nil))
+			return
+		}
+
 		_, err = tx.Exec(ctx, `
 			INSERT INTO pages_closures (ancestor_id, descendant_id, is_parent) 
-			SELECT ancestor_id, $2 as descendant_id,
+			SELECT ancestor_id, $2::uuid as descendant_id,
 			false as is_parent
 			FROM pages_closures
 			WHERE descendant_id = $1
@@ -100,7 +117,7 @@ func (np *CreatePageHandler) CreatePage(c *gin.Context) {
 			UNION ALL
 
 			SELECT $1 as ancestor_id, $2 as descendant_id, true as is_parent
-		`, input.ParentID, pageID)
+		`, parentIDValue, pageID)
 		if err != nil {
 			c.Error(api_error.NewInternalServerError("failed to link page to parent", err))
 			return
