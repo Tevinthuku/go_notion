@@ -44,7 +44,7 @@ jobs:
 
       - name: Run migrations
         working-directory: ./backend
-        run: migrate -path ./backend/db/migrations/sql -database "postgres://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/notion_test?sslmode=disable" up
+        run: migrate -path db/migrations/sql -database "postgres://${{ secrets.DB_USER }}:${{ secrets.DB_PASSWORD }}@localhost:5432/notion_test?sslmode=disable" up
 
       - name: Build
         run: go build -v ./backend/...
