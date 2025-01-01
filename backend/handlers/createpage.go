@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/gofrs/uuid/v5"
 )
@@ -29,6 +30,10 @@ func NewCreatePageHandler(db db.DB, pageConfig *page.PageConfig) (*CreatePageHan
 	return &CreatePageHandler{db, pageConfig}, nil
 }
 
+type CreatePageInput struct {
+	ParentID *uuid.UUID `json:"parent_id"`
+}
+
 func (np *CreatePageHandler) CreatePage(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 2*time.Second)
 	defer cancel()
@@ -44,9 +49,28 @@ func (np *CreatePageHandler) CreatePage(c *gin.Context) {
 		return
 	}
 
+	var input CreatePageInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.Error(api_error.NewBadRequestError(err.Error(), err))
+		return
+	}
+
+	var isTopLevel bool = true
+	if input.ParentID != nil {
+		isTopLevel = false
+	}
+
+	tx, err := np.db.BeginTx(ctx, pgx.TxOptions{})
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("failed to create page", err))
+		return
+	}
+
+	defer tx.Rollback(ctx)
+
 	var position float64
 
-	err := np.db.QueryRow(ctx, `
+	err = tx.QueryRow(ctx, `
 		SELECT COALESCE(MAX(position), 0) FROM pages WHERE created_by = $1
 	`, userIdInt).Scan(&position)
 	if err != nil {
@@ -56,10 +80,34 @@ func (np *CreatePageHandler) CreatePage(c *gin.Context) {
 
 	var pageID uuid.UUID
 	position += float64(np.pageConfig.Spacing)
-	err = np.db.QueryRow(ctx, `
-		INSERT INTO pages (created_by, position) VALUES ($1, $2) RETURNING id
-	`, userIdInt, position).Scan(&pageID)
+	err = tx.QueryRow(ctx, `
+		INSERT INTO pages (created_by, position, is_top_level) VALUES ($1, $2, $3) RETURNING id
+	`, userIdInt, position, isTopLevel).Scan(&pageID)
 
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("failed to create page", err))
+		return
+	}
+
+	if input.ParentID != nil {
+		_, err = tx.Exec(ctx, `
+			INSERT INTO pages_closures (ancestor_id, descendant_id, is_parent) 
+			SELECT ancestor_id, $2 as descendant_id,
+			CASE WHEN ancestor_id = $2 THEN true ELSE false END as is_parent
+			FROM pages_closures
+			WHERE descendant_id = $1
+
+			UNION ALL
+
+			SELECT $1 as ancestor_id, $2 as descendant_id, true as is_parent
+		`, input.ParentID, pageID)
+		if err != nil {
+			c.Error(api_error.NewInternalServerError("failed to link page to parent", err))
+			return
+		}
+	}
+
+	err = tx.Commit(ctx)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to create page", err))
 		return
