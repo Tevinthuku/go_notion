@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"go_notion/backend/db"
 	"go_notion/backend/handlers"
 	"go_notion/backend/page"
 	"go_notion/backend/router"
@@ -9,20 +10,19 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/gofrs/uuid/v5"
-	"github.com/pashagolub/pgxmock/v4"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestNewPage(t *testing.T) {
-	mock, err := pgxmock.NewPool()
+
+	pool, err := db.RunTestDb(db.InsertTestUserFixture)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mock.Close()
+	defer pool.Close()
 
 	pageConfig := page.NewPageConfig(10)
-	np, err := handlers.NewCreatePageHandler(mock, pageConfig)
+	np, err := handlers.NewCreatePageHandler(pool, pageConfig)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -30,40 +30,24 @@ func TestNewPage(t *testing.T) {
 	tests := []struct {
 		name           string
 		userID         any
-		setupMock      func(mock pgxmock.PgxPoolIface)
 		expectedStatus int
 	}{
 		{
 			name:   "successfully create page",
 			userID: int64(1),
-			setupMock: func(mock pgxmock.PgxPoolIface) {
-				uuid, err := uuid.NewV4()
-				if err != nil {
-					t.Fatal(err)
-				}
-				mock.ExpectQuery(`
-				SELECT COALESCE\(MAX\(position\), 0\) FROM pages WHERE created_by = \$1
-			`).WithArgs(int64(1)).WillReturnRows(pgxmock.NewRows([]string{"coalesce"}).AddRow(float64(0)))
 
-				mock.ExpectQuery(`
-				INSERT INTO pages \(created_by, position\) VALUES \(\$1, \$2\) RETURNING id
-			`).WithArgs(int64(1), float64(pageConfig.Spacing)).WillReturnRows(pgxmock.NewRows([]string{"id"}).AddRow(uuid))
-			},
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name:   "invalid user id",
 			userID: "invalid",
-			setupMock: func(mock pgxmock.PgxPoolIface) {
-			},
+
 			expectedStatus: http.StatusUnauthorized,
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			mock.Reset()
-			test.setupMock(mock)
 
 			r := router.NewRouter()
 			// Setup route with middleware that would normally set user_id
