@@ -7,6 +7,7 @@ import (
 	"go_notion/backend/router"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -60,7 +61,7 @@ func TestNewPage(t *testing.T) {
 
 			c, _ := gin.CreateTestContext(w)
 
-			req, _ := http.NewRequestWithContext(c, "POST", "/api/pages", nil)
+			req, _ := http.NewRequestWithContext(c, "POST", "/api/pages", strings.NewReader(`{}`))
 
 			r.ServeHTTP(w, req)
 
