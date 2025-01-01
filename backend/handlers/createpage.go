@@ -93,7 +93,7 @@ func (np *CreatePageHandler) CreatePage(c *gin.Context) {
 		_, err = tx.Exec(ctx, `
 			INSERT INTO pages_closures (ancestor_id, descendant_id, is_parent) 
 			SELECT ancestor_id, $2 as descendant_id,
-			CASE WHEN ancestor_id = $2 THEN true ELSE false END as is_parent
+			false as is_parent
 			FROM pages_closures
 			WHERE descendant_id = $1
 
