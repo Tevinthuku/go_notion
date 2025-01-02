@@ -120,7 +120,7 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		UPDATE pages SET text_title = $1 WHERE id = $2
 	`, newPageTitle, newPageID)
 	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
+		c.Error(api_error.NewInternalServerError("failed to change page title", err))
 		return
 	}
 
@@ -144,12 +144,10 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 	}
 	rows.Close()
 
-	if len(pageAncestors) > 0 {
-		err = insertPageClosures(ctx, tx, pageAncestors)
-		if err != nil {
-			c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
-			return
-		}
+	err = insertPageClosures(ctx, tx, pageAncestors)
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
+		return
 	}
 
 	err = h.duplicateDescendants(ctx, tx, pageID, newPageID, position)
@@ -312,6 +310,9 @@ type PageClosure struct {
 }
 
 func insertPageClosures(ctx context.Context, tx pgx.Tx, pageClosures []PageClosure) error {
+	if len(pageClosures) == 0 {
+		return nil
+	}
 	valueStrings := make([]string, 0, len(pageClosures))
 	valueArgs := make([]interface{}, 0, len(pageClosures)*3)
 	for i, closure := range pageClosures {
