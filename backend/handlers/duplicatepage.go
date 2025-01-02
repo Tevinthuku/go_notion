@@ -100,6 +100,26 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 
 	position += float64(h.pageConfig.Spacing)
 
+	// var pageDescendants []uuid.UUID
+
+	// rows, err := tx.Query(ctx, `
+	//    SELECT descendant_id FROM pages_closures WHERE ancestor_id = $1
+	// `, pageID)
+	// if err != nil {
+	// 	c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
+	// 	return
+	// }
+
+	// for rows.Next() {
+	// 	var descendantID uuid.UUID
+	// 	if err := rows.Scan(&descendantID); err != nil {
+	// 		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
+	// 		return
+	// 	}
+	// 	pageDescendants = append(pageDescendants, descendantID)
+	// }
+	// rows.Close()
+
 	columnsToSelect := []string{}
 	for _, col := range PageColumns {
 		if col == "position" {
@@ -131,6 +151,48 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
 		return
+	}
+	type PageClosure struct {
+		AncestorID   uuid.UUID
+		DescendantID uuid.UUID
+		IsParent     bool
+	}
+	pageAncestors := []PageClosure{}
+
+	rows, err := tx.Query(ctx, `
+	SELECT ancestor_id, is_parent FROM pages_closures WHERE descendant_id = $1
+	`, pageID)
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
+		return
+	}
+	for rows.Next() {
+		var ancestorID uuid.UUID
+		var isParent bool
+		if err := rows.Scan(&ancestorID, &isParent); err != nil {
+			c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
+			return
+		}
+		pageAncestors = append(pageAncestors, PageClosure{AncestorID: ancestorID, DescendantID: newPageID, IsParent: isParent})
+	}
+	rows.Close()
+
+	if len(pageAncestors) > 0 {
+		valueStrings := make([]string, 0, len(pageAncestors))
+		valueArgs := make([]interface{}, 0, len(pageAncestors)*3)
+		for i, closure := range pageAncestors {
+			valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d)", i*3+1, i*3+2, i*3+3))
+			valueArgs = append(valueArgs, closure.AncestorID, closure.DescendantID, closure.IsParent)
+		}
+		query := fmt.Sprintf(`
+			INSERT INTO pages_closures (ancestor_id, descendant_id, is_parent) VALUES %s
+		`, strings.Join(valueStrings, ","))
+
+		_, err = tx.Exec(ctx, query, valueArgs...)
+		if err != nil {
+			c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
+			return
+		}
 	}
 
 	if err := tx.Commit(ctx); err != nil {
