@@ -19,8 +19,8 @@ import (
 
 // maintaining this list is important to ensure that the query is updated when the schema changes.
 // we also have a test to ensure it is updated when the schema changes
-// this is a copy of the columns in the pages table, excluding id, created_at, and updated_at
-var PageColumns = []string{"created_by", "position", "text_title", "text_content", "title", "content", "is_top_level"}
+// this is a copy of the columns in the pages table, excluding created_at, and updated_at
+var PageColumns = []string{"id", "created_by", "position", "text_title", "text_content", "title", "content", "is_top_level"}
 
 type DuplicatePageHandler struct {
 	db         db.DB
@@ -98,27 +98,16 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		return
 	}
 
-	position += float64(h.pageConfig.Spacing)
-
-	columnsToSelect := []string{}
-	for _, col := range PageColumns {
-		if col == "position" {
-			columnsToSelect = append(columnsToSelect, "$2")
-		} else if col == "text_title" {
-			columnsToSelect = append(columnsToSelect, "$3")
-		} else {
-			columnsToSelect = append(columnsToSelect, col)
-		}
+	m, err := h.duplicatePages(ctx, tx, []uuid.UUID{pageID}, position)
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
+		return
 	}
-	columnsToInsert := strings.Join(PageColumns, ", ")
-	var newPageID uuid.UUID
-	query := fmt.Sprintf(`
-		INSERT INTO pages (%s)
-		SELECT %s
-		FROM pages 
-		WHERE id = $1
-		RETURNING id
-	`, columnsToInsert, strings.Join(columnsToSelect, ", "))
+	newPageID, ok := m[pageID]
+	if !ok {
+		c.Error(api_error.NewInternalServerError("failed to duplicate page", fmt.Errorf("failed to find new page id for page %s", pageID)))
+		return
+	}
 
 	var newPageTitle string
 	if pageTitle.Valid {
@@ -127,7 +116,9 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		newPageTitle = "Copy"
 	}
 
-	err = tx.QueryRow(ctx, query, pageID, position, newPageTitle).Scan(&newPageID)
+	_, err = tx.Exec(ctx, `
+		UPDATE pages SET text_title = $1 WHERE id = $2
+	`, newPageTitle, newPageID)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
 		return
@@ -216,33 +207,14 @@ func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.
 		mappingOfDescendantsWithAllAncestors[closure.DescendantID] = append(mappingOfDescendantsWithAllAncestors[closure.DescendantID], closure)
 	}
 
-	columnsToInsert := strings.Join(PageColumns, ", ")
-
-	columnsToSelect := []string{}
-	for _, col := range PageColumns {
-		if col == "position" {
-			columnsToSelect = append(columnsToSelect, "$2")
-		} else {
-			columnsToSelect = append(columnsToSelect, col)
-		}
+	var pageIds []uuid.UUID
+	for oldDescendantID := range uniqueDescendants {
+		pageIds = append(pageIds, oldDescendantID)
 	}
 
-	mappingOfOldDescendantToNewDescendantId := make(map[uuid.UUID]uuid.UUID)
-	for oldDescendantID := range uniqueDescendants {
-		query := fmt.Sprintf(`
-			INSERT INTO pages (%s)
-			SELECT %s
-			FROM pages 
-			WHERE id = $1
-			RETURNING id
-		`, columnsToInsert, strings.Join(columnsToSelect, ", "))
-		lastPagePosition += float64(h.pageConfig.Spacing)
-		var newPageID uuid.UUID
-		err = tx.QueryRow(ctx, query, oldDescendantID, lastPagePosition).Scan(&newPageID)
-		if err != nil {
-			return fmt.Errorf("failed to duplicate page: %w", err)
-		}
-		mappingOfOldDescendantToNewDescendantId[oldDescendantID] = newPageID
+	mappingOfOldDescendantToNewDescendantId, err := h.duplicatePages(ctx, tx, pageIds, lastPagePosition)
+	if err != nil {
+		return fmt.Errorf("failed to duplicate descendant pages: %w", err)
 	}
 
 	var newPageClosureInserts = make([]PageClosure, 0, len(descendantsWithAllAncestors))
@@ -277,6 +249,56 @@ func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.
 	}
 
 	return nil
+}
+
+func (h *DuplicatePageHandler) duplicatePages(ctx context.Context, tx pgx.Tx, pageIds []uuid.UUID, lastPagePosition float64) (map[uuid.UUID]uuid.UUID, error) {
+	if len(pageIds) == 0 {
+		return nil, nil
+	}
+	valueStrings := make([]string, 0, len(pageIds))
+	valueArgs := make([]interface{}, 0, len(pageIds))
+	mappingOfOldPageIdToNewPageId := make(map[uuid.UUID]uuid.UUID, len(pageIds))
+	for i, pageId := range pageIds {
+		newPageId, err := uuid.NewV4()
+		if err != nil {
+			return nil, fmt.Errorf("failed to generate new page id: %w", err)
+		}
+		mappingOfOldPageIdToNewPageId[pageId] = newPageId
+		lastPagePosition += float64(h.pageConfig.Spacing)
+		valueStrings = append(valueStrings, fmt.Sprintf("($%d::uuid, $%d::uuid, $%d::float8)", i*3+1, i*3+2, i*3+3))
+		valueArgs = append(valueArgs, pageId, newPageId, lastPagePosition)
+	}
+
+	columnsToInsert := []string{}
+	columnsToSelect := []string{}
+	for _, col := range PageColumns {
+		if col == "id" {
+			columnsToSelect = append(columnsToSelect, "v.new_page_id as id")
+		} else if col == "position" {
+			columnsToSelect = append(columnsToSelect, "v.new_position as position")
+		} else {
+			columnsToSelect = append(columnsToSelect, col)
+		}
+		columnsToInsert = append(columnsToInsert, col)
+	}
+
+	query := fmt.Sprintf(`
+		INSERT INTO pages (%s)
+		SELECT %s
+		FROM pages
+		CROSS JOIN (VALUES %s) AS v(id, new_page_id, new_position)
+		WHERE pages.id = v.id
+	`, strings.Join(columnsToInsert, ", "), strings.Join(columnsToSelect, ", "), strings.Join(valueStrings, ","))
+
+	fmt.Println("the query: ", query)
+
+	_, err := tx.Exec(ctx, query, valueArgs...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to duplicate pages in bulk: %w", err)
+	}
+
+	return mappingOfOldPageIdToNewPageId, nil
+
 }
 
 func (dp *DuplicatePageHandler) RegisterRoutes(router *gin.RouterGroup) {

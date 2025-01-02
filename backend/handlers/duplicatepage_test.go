@@ -39,7 +39,7 @@ func TestPageColumnsAreInSyncWithDb(t *testing.T) {
 			t.Fatal(err)
 		}
 		// we ignore the auto-generated columns
-		if colName == "id" || colName == "created_at" || colName == "updated_at" {
+		if colName == "created_at" || colName == "updated_at" {
 			continue
 		}
 		columns = append(columns, colName)
