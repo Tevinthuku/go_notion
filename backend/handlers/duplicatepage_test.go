@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -119,47 +118,53 @@ func TestDuplicatePage(t *testing.T) {
 
 func TestDuplicatePageWithNestedPages(t *testing.T) {
 	parentPageId := uuid.Must(uuid.NewV4())
-	pool, err := db.RunTestDb(db.InsertTestUserFixture, db.InsertTestPageFixture(parentPageId, 1))
+	childPageId := uuid.Must(uuid.NewV4())
+	pool, err := db.RunTestDb(db.InsertTestUserFixture, db.InsertTestPageFixtureWithParent(childPageId, parentPageId, 1))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer pool.Close()
 
-	createPage, err := handlers.NewCreatePageHandler(pool, page.NewPageConfig(10))
-	if err != nil {
-		t.Fatal(err)
-	}
 	duplicatePage, err := handlers.NewDuplicatePageHandler(pool, page.NewPageConfig(10))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	r := router.NewRouter()
+	tests := []struct {
+		name           string
+		pageId         uuid.UUID
+		userID         int64
+		expectedStatus int
+	}{
+		{
+			name:           "successfully duplicate parent page with nested page",
+			pageId:         parentPageId,
+			userID:         1,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "successfully duplicate nested page",
+			pageId:         childPageId,
+			userID:         1,
+			expectedStatus: http.StatusOK,
+		},
+	}
 
-	r.POST("/api/pages", func(c *gin.Context) {
-		c.Set("user_id", int64(1))
-		createPage.CreatePage(c)
-	})
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := router.NewRouter()
 
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	c.Request, _ = http.NewRequest("POST", "/api/pages", strings.NewReader(`{"parent_id": "`+parentPageId.String()+`"}`))
-	r.ServeHTTP(w, c.Request)
+			r.POST("/api/pages/:id/duplicate", func(c *gin.Context) {
+				c.Set("user_id", test.userID)
+				duplicatePage.DuplicatePage(c)
+			})
 
-	println(w.Body.String())
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request, _ = http.NewRequest("POST", "/api/pages/"+test.pageId.String()+"/duplicate", nil)
+			r.ServeHTTP(w, c.Request)
 
-	assert.Equal(t, http.StatusOK, w.Code)
-
-	r.POST("/api/pages/:id/duplicate", func(c *gin.Context) {
-		c.Set("user_id", int64(1))
-		duplicatePage.DuplicatePage(c)
-	})
-
-	w = httptest.NewRecorder()
-	c, _ = gin.CreateTestContext(w)
-	c.Request, _ = http.NewRequest("POST", "/api/pages/"+parentPageId.String()+"/duplicate", nil)
-	r.ServeHTTP(w, c.Request)
-
-	assert.Equal(t, http.StatusOK, w.Code)
-
+			assert.Equal(t, test.expectedStatus, w.Code)
+		})
+	}
 }
