@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"context"
 	"go_notion/backend/db"
 	"go_notion/backend/handlers"
 	"go_notion/backend/router"
@@ -82,4 +83,50 @@ func TestDeletePage(t *testing.T) {
 			assert.Equal(t, test.expectedStatus, w.Code)
 		})
 	}
+}
+
+func TestDeletePageWithNestedPages(t *testing.T) {
+	pageId := uuid.Must(uuid.NewV4())
+	childPageId := uuid.Must(uuid.NewV4())
+
+	unrelatedPageId := uuid.Must(uuid.NewV4())
+	pool, err := db.RunTestDb(db.InsertTestUserFixture, db.InsertTestPageFixtureWithParent(childPageId, pageId, 1), db.InsertTestPageFixtureWithPosition(unrelatedPageId, 1, 102))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+
+	deletePage, err := handlers.NewDeletePageHandler(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := router.NewRouter()
+
+	r.DELETE("/api/pages/:id", func(c *gin.Context) {
+		c.Set("user_id", int64(1))
+		deletePage.DeletePage(c)
+	})
+
+	w := httptest.NewRecorder()
+
+	c, _ := gin.CreateTestContext(w)
+
+	c.Request, _ = http.NewRequest("DELETE", "/api/pages/"+pageId.String(), nil)
+
+	r.ServeHTTP(w, c.Request)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+
+	// check that the child page was deleted
+	var childExists bool
+	err = pool.QueryRow(context.Background(), "SELECT EXISTS(SELECT 1 FROM pages WHERE id = $1)", childPageId).Scan(&childExists)
+	assert.NoError(t, err)
+	assert.Equal(t, false, childExists)
+
+	// check that the unrelated page was not deleted
+	var unrelatedPageExists bool
+	err = pool.QueryRow(context.Background(), "SELECT EXISTS(SELECT 1 FROM pages WHERE id = $1)", unrelatedPageId).Scan(&unrelatedPageExists)
+	assert.NoError(t, err)
+	assert.Equal(t, true, unrelatedPageExists)
 }

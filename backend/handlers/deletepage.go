@@ -63,18 +63,9 @@ func (dp *DeletePageHandler) DeletePage(c *gin.Context) {
 		return
 	}
 
-	cmd, err := tx.Exec(ctx, `
-		DELETE FROM pages WHERE id = $1 AND created_by = $2
-	`, pageID, userIdInt)
-	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to delete page", err))
-		return
-	}
-
-	if cmd.RowsAffected() == 0 {
-		c.Error(api_error.NewNotFoundError("page not found", nil))
-		return
-	}
+	// Delete nested pages first. If we delete the parent page first, its pages_closures records
+	// will be deleted, losing the information about which pages were nested under it. This would
+	// leave the child pages orphaned in the database.
 	_, err = tx.Exec(ctx, `
 		DELETE FROM pages WHERE id IN (
 			SELECT descendant_id FROM pages_closures WHERE ancestor_id = $1
@@ -83,6 +74,19 @@ func (dp *DeletePageHandler) DeletePage(c *gin.Context) {
 
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to delete nested pages", err))
+		return
+	}
+
+	cmd, err := tx.Exec(ctx, `
+		DELETE FROM pages WHERE id = $1::uuid AND created_by = $2
+	`, pageID, userIdInt)
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("failed to delete page", err))
+		return
+	}
+
+	if cmd.RowsAffected() == 0 {
+		c.Error(api_error.NewNotFoundError("page not found", nil))
 		return
 	}
 

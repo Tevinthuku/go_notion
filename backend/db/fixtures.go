@@ -45,6 +45,12 @@ func InsertTestPageFixtureWithParent(page_id uuid.UUID, parent_id uuid.UUID, use
 	}
 }
 
+func InsertTestPageFixtureWithPosition(page_id uuid.UUID, user_id int64, position int) Fixture {
+	return func(conn *pgx.Conn) error {
+		return insertPageFixture(conn, page_id, user_id, position, true)
+	}
+}
+
 func insertPageFixture(conn *pgx.Conn, page_id uuid.UUID, user_id int64, position int, is_top_level bool) error {
 	_, err := conn.Exec(context.Background(), `
 	INSERT INTO pages (id, created_by, position, text_title, text_content, title, content, is_top_level) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
