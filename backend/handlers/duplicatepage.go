@@ -41,7 +41,6 @@ type DuplicatePageUrlInput struct {
 func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
 	defer cancel()
-
 	userID, ok := c.Get("user_id")
 	if !ok {
 		c.Error(api_error.NewUnauthorizedError("not authorized to duplicate page", nil))
@@ -150,7 +149,7 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		return
 	}
 
-	err = h.duplicateDescendants(ctx, tx, pageID, newPageID, position)
+	err = h.duplicateDescendants(ctx, tx, pageID, newPageID, position+float64(h.pageConfig.Spacing))
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
 		return
@@ -205,12 +204,12 @@ func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.
 		mappingOfDescendantsWithAllAncestors[closure.DescendantID] = append(mappingOfDescendantsWithAllAncestors[closure.DescendantID], closure)
 	}
 
-	var pageIds []uuid.UUID
-	for oldDescendantID := range uniqueDescendants {
-		pageIds = append(pageIds, oldDescendantID)
+	var descendantIds []uuid.UUID
+	for descendantID := range uniqueDescendants {
+		descendantIds = append(descendantIds, descendantID)
 	}
 
-	mappingOfOldDescendantToNewDescendantId, err := h.duplicatePages(ctx, tx, pageIds, lastPagePosition)
+	mappingOfOldDescendantToNewDescendantId, err := h.duplicatePages(ctx, tx, descendantIds, lastPagePosition)
 	if err != nil {
 		return fmt.Errorf("failed to duplicate descendant pages: %w", err)
 	}
@@ -288,8 +287,6 @@ func (h *DuplicatePageHandler) duplicatePages(ctx context.Context, tx pgx.Tx, pa
 		WHERE pages.id = v.id
 	`, strings.Join(columnsToInsert, ", "), strings.Join(columnsToSelect, ", "), strings.Join(valueStrings, ","))
 
-	fmt.Println("the query: ", query)
-
 	_, err := tx.Exec(ctx, query, valueArgs...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to duplicate pages in bulk: %w", err)
@@ -297,10 +294,6 @@ func (h *DuplicatePageHandler) duplicatePages(ctx context.Context, tx pgx.Tx, pa
 
 	return mappingOfOldPageIdToNewPageId, nil
 
-}
-
-func (dp *DuplicatePageHandler) RegisterRoutes(router *gin.RouterGroup) {
-	router.POST("/pages/:id/duplicate", dp.DuplicatePage)
 }
 
 type PageClosure struct {
@@ -326,4 +319,8 @@ func insertPageClosures(ctx context.Context, tx pgx.Tx, pageClosures []PageClosu
 
 	_, err := tx.Exec(ctx, query, valueArgs...)
 	return err
+}
+
+func (dp *DuplicatePageHandler) RegisterRoutes(router *gin.RouterGroup) {
+	router.POST("/pages/:id/duplicate", dp.DuplicatePage)
 }
