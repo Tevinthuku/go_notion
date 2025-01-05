@@ -64,9 +64,6 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		return
 	}
 
-	var pageTitle sql.NullString
-	var pageCreatedBy int64
-
 	tx, err := h.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to begin transaction", err))
@@ -74,18 +71,44 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 	}
 	defer tx.Rollback(ctx)
 
-	err = tx.QueryRow(ctx, `
-		SELECT created_by, text_title FROM pages WHERE id = $1 AND created_by = $2
-	`, pageID, userIdInt).Scan(&pageCreatedBy, &pageTitle)
-
-	if errors.Is(err, pgx.ErrNoRows) {
-		c.Error(api_error.NewNotFoundError("page not found", nil))
+	targetPage, apiErr := h.duplicateTargetPage(ctx, tx, pageID, userIdInt)
+	if apiErr != nil {
+		c.Error(apiErr)
 		return
 	}
 
+	err = h.duplicateDescendants(ctx, tx, pageID, targetPage.ID, targetPage.Position+float64(h.pageConfig.Spacing))
 	if err != nil {
-		c.Error(api_error.NewInternalServerError("error getting page to duplicate", err))
+		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
 		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "page duplicated successfully", "id": targetPage.ID})
+
+}
+
+type DuplicatedPage struct {
+	ID       uuid.UUID
+	Position float64
+}
+
+func (h *DuplicatePageHandler) duplicateTargetPage(ctx context.Context, tx pgx.Tx, pageID uuid.UUID, userIdInt int64) (*DuplicatedPage, *api_error.ApiError) {
+	var pageTitle sql.NullString
+	err := tx.QueryRow(ctx, `
+		SELECT text_title FROM pages WHERE id = $1 AND created_by = $2
+	`, pageID, userIdInt).Scan(&pageTitle)
+
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, api_error.NewNotFoundError("page not found", nil)
+	}
+
+	if err != nil {
+		return nil, api_error.NewInternalServerError("error getting page to duplicate", err)
 	}
 	var position float64
 
@@ -93,19 +116,16 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		SELECT COALESCE(MAX(position), 0) FROM pages WHERE created_by = $1
 	`, userIdInt).Scan(&position)
 	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
-		return
+		return nil, api_error.NewInternalServerError("failed to duplicate page", err)
 	}
 
 	m, err := h.duplicatePages(ctx, tx, []uuid.UUID{pageID}, position)
 	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
-		return
+		return nil, api_error.NewInternalServerError("failed to duplicate page", err)
 	}
 	newPageID, ok := m[pageID]
 	if !ok {
-		c.Error(api_error.NewInternalServerError("failed to duplicate page", fmt.Errorf("failed to find new page id for page %s", pageID)))
-		return
+		return nil, api_error.NewInternalServerError("failed to duplicate page", fmt.Errorf("failed to find new page id for page %s", pageID))
 	}
 
 	var newPageTitle string
@@ -119,14 +139,12 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		UPDATE pages SET text_title = $1 WHERE id = $2
 	`, newPageTitle, newPageID)
 	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to change page title", err))
-		return
+		return nil, api_error.NewInternalServerError("failed to change page title", err)
 	}
 
 	pageAncestors, err := getAncestors(ctx, tx, pageID)
 	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
-		return
+		return nil, api_error.NewInternalServerError("failed to duplicate page", err)
 	}
 	// we need to replace pageId with newPageId in the pageAncestors
 	for i := range pageAncestors {
@@ -135,23 +153,10 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 
 	err = insertPageClosures(ctx, tx, pageAncestors)
 	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
-		return
+		return nil, api_error.NewInternalServerError("failed to duplicate page", err)
 	}
 
-	err = h.duplicateDescendants(ctx, tx, pageID, newPageID, position+float64(h.pageConfig.Spacing))
-	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
-		return
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "page duplicated successfully", "id": newPageID})
-
+	return &DuplicatedPage{ID: newPageID, Position: position}, nil
 }
 
 func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.Tx, pageID uuid.UUID, newPageID uuid.UUID, lastPagePosition float64) error {
@@ -216,11 +221,13 @@ func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.
 		for _, closure := range ancestors {
 			ancestorID := closure.AncestorID
 
+			// pageID is the page that we are duplicating, so we need to update the page closure to point to the new page
 			if ancestorID == pageID {
 				newPageClosureInserts = append(newPageClosureInserts, PageClosure{AncestorID: newPageID, DescendantID: newDescendantID, IsParent: closure.IsParent})
 				continue
 			}
 
+			// if the ancestor is a descendant of the page we are duplicating, we need to update the page closure to point to the new descendant page
 			if newAncestorID, ok := mappingOfOldDescendantToNewDescendantId[ancestorID]; ok {
 				newPageClosureInserts = append(newPageClosureInserts, PageClosure{AncestorID: newAncestorID, DescendantID: newDescendantID, IsParent: closure.IsParent})
 				continue
