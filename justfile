@@ -13,9 +13,9 @@ db-down:
 backend_test: db-up db-migrate
 	go test -v ./backend/...
 
-clean-db:
+hard-clean-db:
 	docker compose down -v
 
-reset-db: clean-db
+reset-db: hard-clean-db
 	docker compose up -d
 	migrate -path backend/db/migrations/sql -database ${DATABASE_URL} up

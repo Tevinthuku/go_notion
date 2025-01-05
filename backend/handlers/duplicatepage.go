@@ -18,8 +18,8 @@ import (
 )
 
 // maintaining this list is important to ensure that the query is updated when the schema changes.
-// we also have a test to ensure it is updated when the schema changes
 // this is a copy of the columns in the pages table, excluding created_at, and updated_at because these will be auto generated
+// Note: TestPageColumnsMatchSchema in backend/handlers/duplicatepage_test.go ensures this list stays in sync with the database schema
 var PageColumns = []string{"id", "created_by", "position", "text_title", "text_content", "title", "content", "is_top_level"}
 
 type DuplicatePageHandler struct {
@@ -123,25 +123,15 @@ func (h *DuplicatePageHandler) DuplicatePage(c *gin.Context) {
 		return
 	}
 
-	pageAncestors := []PageClosure{}
-
-	rows, err := tx.Query(ctx, `
-	SELECT ancestor_id, is_parent FROM pages_closures WHERE descendant_id = $1
-	`, pageID)
+	pageAncestors, err := getAncestors(ctx, tx, pageID)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
 		return
 	}
-	for rows.Next() {
-		var ancestorID uuid.UUID
-		var isParent bool
-		if err := rows.Scan(&ancestorID, &isParent); err != nil {
-			c.Error(api_error.NewInternalServerError("failed to duplicate page", err))
-			return
-		}
-		pageAncestors = append(pageAncestors, PageClosure{AncestorID: ancestorID, DescendantID: newPageID, IsParent: isParent})
+	// we need to replace pageId with newPageId in the pageAncestors
+	for i := range pageAncestors {
+		pageAncestors[i].DescendantID = newPageID
 	}
-	rows.Close()
 
 	err = insertPageClosures(ctx, tx, pageAncestors)
 	if err != nil {
@@ -318,7 +308,33 @@ func insertPageClosures(ctx context.Context, tx pgx.Tx, pageClosures []PageClosu
 	`, strings.Join(valueStrings, ","))
 
 	_, err := tx.Exec(ctx, query, valueArgs...)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to insert page closures: %w", err)
+	}
+	return nil
+}
+
+func getAncestors(ctx context.Context, tx pgx.Tx, pageID uuid.UUID) ([]PageClosure, error) {
+
+	pageAncestors := []PageClosure{}
+
+	rows, err := tx.Query(ctx, `
+	SELECT ancestor_id, is_parent FROM pages_closures WHERE descendant_id = $1
+	`, pageID)
+	if err != nil {
+		return nil, err
+	}
+	for rows.Next() {
+		var ancestorID uuid.UUID
+		var isParent bool
+		if err := rows.Scan(&ancestorID, &isParent); err != nil {
+			return nil, err
+		}
+		pageAncestors = append(pageAncestors, PageClosure{AncestorID: ancestorID, DescendantID: pageID, IsParent: isParent})
+	}
+	rows.Close()
+
+	return pageAncestors, nil
 }
 
 func (dp *DuplicatePageHandler) RegisterRoutes(router *gin.RouterGroup) {

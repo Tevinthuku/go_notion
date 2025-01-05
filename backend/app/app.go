@@ -12,6 +12,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -42,6 +43,7 @@ func New(port string) (*App, error) {
 	app.pool = pool
 
 	appRouter := router.NewRouter()
+	appRouter.Use(router.IPRateLimiter(router.RateLimitConfig{Requests: 60, Period: time.Minute, Burst: 5}))
 
 	server := &http.Server{
 		Addr:    port,
