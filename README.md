@@ -34,3 +34,9 @@ run the following command:
 ```bash
 migrate -database "your_database_url" -path db/migrations/sql force 1
 ```
+
+then:
+
+```bash
+migrate -path db/migrations/sql -database "your_database_url" up
+```

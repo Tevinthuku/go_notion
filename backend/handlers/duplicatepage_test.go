@@ -39,7 +39,7 @@ func TestPageColumnsAreInSyncWithDb(t *testing.T) {
 			t.Fatal(err)
 		}
 		// we ignore the auto-generated columns
-		if colName == "id" || colName == "created_at" || colName == "updated_at" {
+		if colName == "created_at" || colName == "updated_at" {
 			continue
 		}
 		columns = append(columns, colName)
@@ -49,9 +49,10 @@ func TestPageColumnsAreInSyncWithDb(t *testing.T) {
 	}
 
 	fmt.Println(columns)
-	for _, col := range handlers.PageColumns {
-		if !slices.Contains(columns, col) {
-			t.Errorf("column %s is missing from the pages table", col)
+
+	for _, col := range columns {
+		if !slices.Contains(handlers.PageColumns, col) {
+			t.Errorf("column %s is not in the PageColumns list", col)
 		}
 	}
 
@@ -93,6 +94,59 @@ func TestDuplicatePage(t *testing.T) {
 			pageId:         uuid.Must(uuid.NewV4()),
 			userID:         1,
 			expectedStatus: http.StatusNotFound,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := router.NewRouter()
+
+			r.POST("/api/pages/:id/duplicate", func(c *gin.Context) {
+				c.Set("user_id", test.userID)
+				duplicatePage.DuplicatePage(c)
+			})
+
+			w := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(w)
+			c.Request, _ = http.NewRequest("POST", "/api/pages/"+test.pageId.String()+"/duplicate", nil)
+			r.ServeHTTP(w, c.Request)
+
+			assert.Equal(t, test.expectedStatus, w.Code)
+		})
+	}
+}
+
+func TestDuplicatePageWithNestedPages(t *testing.T) {
+	parentPageId := uuid.Must(uuid.NewV4())
+	childPageId := uuid.Must(uuid.NewV4())
+	pool, err := db.RunTestDb(db.InsertTestUserFixture, db.InsertTestPageFixtureWithParent(childPageId, parentPageId, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+
+	duplicatePage, err := handlers.NewDuplicatePageHandler(pool, page.NewPageConfig(10))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name           string
+		pageId         uuid.UUID
+		userID         int64
+		expectedStatus int
+	}{
+		{
+			name:           "successfully duplicate parent page with nested page",
+			pageId:         parentPageId,
+			userID:         1,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "successfully duplicate nested page",
+			pageId:         childPageId,
+			userID:         1,
+			expectedStatus: http.StatusOK,
 		},
 	}
 
