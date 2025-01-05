@@ -38,5 +38,5 @@ migrate -database "your_database_url" -path db/migrations/sql force 1
 then:
 
 ```bash
-migrate -path backend/db/migrations/sql -database "your_database_url" up
+migrate -path db/migrations/sql -database "your_database_url" up
 ```
