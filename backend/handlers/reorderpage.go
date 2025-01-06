@@ -118,13 +118,8 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 	}
 
 	closures := generateAncestorClosuresForPageMove(pageID, input.NewParentId, ancestors[input.NewParentId], descendantIds)
-	fmt.Printf("new parent ancestors %+v\n", ancestors[input.NewParentId])
-	fmt.Printf("descendants %+v\n", descendantIds)
-	fmt.Printf("newparentId %+v\n", input.NewParentId)
-	fmt.Printf("pageId %+v\n", pageID)
 	err = insertPageClosures(ctx, tx, closures)
 	if err != nil {
-		fmt.Printf("closures %+v\n", closures)
 		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to insert new ancestors of page: %w", err)))
 		return
 	}
