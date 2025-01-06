@@ -118,9 +118,13 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 	}
 
 	closures := generateAncestorClosuresForPageMove(pageID, input.NewParentId, ancestors[input.NewParentId], descendantIds)
-
+	fmt.Printf("new parent ancestors %+v\n", ancestors[input.NewParentId])
+	fmt.Printf("descendants %+v\n", descendantIds)
+	fmt.Printf("newparentId %+v\n", input.NewParentId)
+	fmt.Printf("pageId %+v\n", pageID)
 	err = insertPageClosures(ctx, tx, closures)
 	if err != nil {
+		fmt.Printf("closures %+v\n", closures)
 		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to insert new ancestors of page: %w", err)))
 		return
 	}
@@ -201,7 +205,7 @@ func getAncestorIds(ctx context.Context, tx pgx.Tx, pageIDs []uuid.UUID) (map[uu
 	}
 	ancestorIds := make(map[uuid.UUID][]uuid.UUID, len(ancestors))
 	for ancestor, closures := range ancestors {
-		ancestor_ids := make([]uuid.UUID, len(closures))
+		ancestor_ids := make([]uuid.UUID, 0, len(closures))
 		for _, closure := range closures {
 			ancestor_ids = append(ancestor_ids, closure.AncestorID)
 		}
@@ -212,7 +216,7 @@ func getAncestorIds(ctx context.Context, tx pgx.Tx, pageIDs []uuid.UUID) (map[uu
 }
 
 func generateAncestorClosuresForPageMove(currentPageId uuid.UUID, newParentId uuid.UUID, newParentAncestors []uuid.UUID, descendants []uuid.UUID) []PageClosure {
-	var newCurrentPageAncestors []PageClosure = make([]PageClosure, len(newParentAncestors))
+	var newCurrentPageAncestors []PageClosure = make([]PageClosure, 0, len(newParentAncestors))
 	for _, ancestor := range newParentAncestors {
 		newCurrentPageAncestors = append(newCurrentPageAncestors, PageClosure{
 			AncestorID:   ancestor,
@@ -227,15 +231,15 @@ func generateAncestorClosuresForPageMove(currentPageId uuid.UUID, newParentId uu
 		IsParent:     true,
 	})
 
-	ancestorIdsForDescendants := make([]uuid.UUID, len(newCurrentPageAncestors))
+	ancestorIdsForDescendants := make([]uuid.UUID, 0, len(newCurrentPageAncestors))
 	for _, ancestor := range newCurrentPageAncestors {
 		ancestorIdsForDescendants = append(ancestorIdsForDescendants, ancestor.AncestorID)
 	}
 
-	var newClosureInserts = make([]PageClosure, len(descendants)*len(ancestorIdsForDescendants))
+	var newClosureInserts = make([]PageClosure, 0, len(descendants)*len(ancestorIdsForDescendants))
 	newClosureInserts = append(newClosureInserts, newCurrentPageAncestors...)
 	for _, descendantId := range descendants {
-		var ancestors = make([]PageClosure, len(ancestorIdsForDescendants))
+		var ancestors = make([]PageClosure, 0, len(ancestorIdsForDescendants))
 		for _, ancestorId := range ancestorIdsForDescendants {
 			ancestors = append(ancestors, PageClosure{
 				AncestorID:   ancestorId,
@@ -247,4 +251,8 @@ func generateAncestorClosuresForPageMove(currentPageId uuid.UUID, newParentId uu
 	}
 
 	return newClosureInserts
+}
+
+func (rp *ReorderPageHandler) RegisterRoutes(router *gin.RouterGroup) {
+	router.POST("/pages/:id/reorder", rp.ReorderPage)
 }

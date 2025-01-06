@@ -107,8 +107,13 @@ func (app *App) registerHandlers(appRouter *gin.Engine) error {
 		return fmt.Errorf("error creating duplicate page handler: %w", err)
 	}
 
+	reorderPage, err := handlers.NewReorderPageHandler(app.pool)
+	if err != nil {
+		return fmt.Errorf("error creating reorder page handler: %w", err)
+	}
+
 	// protected routes
-	protectedRoutes := []Handler{newPage, updatePage, deletePage, duplicatePage}
+	protectedRoutes := []Handler{newPage, updatePage, deletePage, duplicatePage, reorderPage}
 	protectedApiGroup := apiv1.Group("", app.tokenConfig.AuthMiddleware())
 	for _, r := range protectedRoutes {
 		r.RegisterRoutes(protectedApiGroup)

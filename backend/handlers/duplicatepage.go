@@ -146,10 +146,8 @@ func (h *DuplicatePageHandler) duplicateTargetPage(ctx context.Context, tx pgx.T
 	if err != nil {
 		return nil, api_error.NewInternalServerError("failed to duplicate page", err)
 	}
-	pageAncestors, ok := ancestors[pageID]
-	if !ok {
-		return nil, api_error.NewInternalServerError("failed to duplicate page", fmt.Errorf("failed to find ancestors for page %s", pageID))
-	}
+	pageAncestors := ancestors[pageID]
+
 	// we need to replace pageId with newPageId in the pageAncestors
 	for i := range pageAncestors {
 		pageAncestors[i].DescendantID = newPageID
