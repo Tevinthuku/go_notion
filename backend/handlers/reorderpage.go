@@ -42,6 +42,12 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 		return
 	}
 
+	userIdInt, ok := userID.(int64)
+	if !ok {
+		c.Error(api_error.NewUnauthorizedError("not authorized to reorder page", fmt.Errorf("user id is not an integer")))
+		return
+	}
+
 	var uri ReorderPageUri
 	if err := c.ShouldBindUri(&uri); err != nil {
 		c.Error(api_error.NewBadRequestError(err.Error(), err))
@@ -60,20 +66,9 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 		return
 	}
 
-	// ensure new parent is not a descendant of the current page
-	var willGenerateCyclicClosure bool
-	err = rp.db.QueryRow(ctx, `
-		SELECT EXISTS(
-			SELECT 1 FROM pages_closures WHERE ancestor_id = $1 AND descendant_id = $2
-		)
-	`, pageID, input.NewParentId).Scan(&willGenerateCyclicClosure)
-	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to check if new parent is a descendant: %w", err)))
-		return
-	}
-
-	if willGenerateCyclicClosure {
-		c.Error(api_error.NewBadRequestError("cannot add page to nested page", nil))
+	apiErr := rp.validateInput(ctx, input, pageID, userIdInt)
+	if apiErr != nil {
+		c.Error(apiErr)
 		return
 	}
 
@@ -83,24 +78,6 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 		return
 	}
 	defer tx.Rollback(ctx)
-	var pagesBelongsToUser bool
-	err = tx.QueryRow(ctx,
-		`SELECT EXISTS(
-			SELECT 1 FROM pages 
-			WHERE id IN ($1, $2) 
-			GROUP BY created_by 
-			HAVING created_by = $3 
-			AND COUNT(*) = 2
-		)`, uri.ID, input.NewParentId, userID).Scan(&pagesBelongsToUser)
-	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to check if page belongs to user: %w", err)))
-		return
-	}
-
-	if !pagesBelongsToUser {
-		c.Error(api_error.NewUnauthorizedError("not authorized to reorder page", nil))
-		return
-	}
 
 	ancestors, err := getAncestors(ctx, tx, []uuid.UUID{pageID, input.NewParentId})
 	if err != nil {
@@ -136,9 +113,9 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 		return
 	}
 
-	var newDescendantClosuresToInsert = make([]PageClosure, len(descendants))
+	var newClosureInserts = make([]PageClosure, len(descendants))
 	// since the page is being moved to a new parent, we need to add a new closure
-	newDescendantClosuresToInsert = append(newDescendantClosuresToInsert, PageClosure{
+	newClosureInserts = append(newClosureInserts, PageClosure{
 		AncestorID:   input.NewParentId,
 		DescendantID: pageID,
 		IsParent:     true,
@@ -149,10 +126,10 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 		for i := range newAncestors {
 			newAncestors[i].DescendantID = descendant
 		}
-		newDescendantClosuresToInsert = append(newDescendantClosuresToInsert, newAncestors...)
+		newClosureInserts = append(newClosureInserts, newAncestors...)
 	}
 
-	err = insertPageClosures(ctx, tx, newDescendantClosuresToInsert)
+	err = insertPageClosures(ctx, tx, newClosureInserts)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to insert new ancestors of page: %w", err)))
 		return
@@ -166,6 +143,43 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 
 	c.Status(http.StatusOK)
 
+}
+
+func (rp *ReorderPageHandler) validateInput(ctx context.Context, input ReorderPageInput, pageID uuid.UUID, userID int64) *api_error.ApiError {
+	// ensure new parent is not a descendant of the current page
+	var willGenerateCyclicClosure bool
+	err := rp.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM pages_closures WHERE ancestor_id = $1 AND descendant_id = $2
+		)
+	`, pageID, input.NewParentId).Scan(&willGenerateCyclicClosure)
+	if err != nil {
+		return api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to check if new parent is a descendant: %w", err))
+	}
+
+	if willGenerateCyclicClosure {
+		return api_error.NewBadRequestError("cannot add page to nested page", nil)
+	}
+
+	var pagesBelongsToUser bool
+	err = rp.db.QueryRow(ctx,
+		`SELECT EXISTS(
+			SELECT 1 FROM pages 
+			WHERE id IN ($1, $2) 
+			GROUP BY created_by 
+			HAVING created_by = $3 
+			AND COUNT(*) = 2
+		)`, pageID, input.NewParentId, userID).Scan(&pagesBelongsToUser)
+
+	if err != nil {
+		return api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to check if page belongs to user: %w", err))
+	}
+
+	if !pagesBelongsToUser {
+		return api_error.NewUnauthorizedError("not authorized to reorder page", nil)
+	}
+
+	return nil
 }
 
 func getDescendants(ctx context.Context, tx pgx.Tx, pageID uuid.UUID) ([]uuid.UUID, error) {
