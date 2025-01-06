@@ -44,3 +44,33 @@ func TestReorderPageWorks(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 }
+
+func TestReorderPageToDescendantDoesntWork(t *testing.T) {
+	parentId := uuid.Must(uuid.NewV4())
+	childId := uuid.Must(uuid.NewV4())
+	pool, err := db.RunTestDb(db.InsertTestUserFixture, db.InsertTestPageFixtureWithParent(parentId, childId, 1))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer pool.Close()
+
+	rp, err := handlers.NewReorderPageHandler(pool)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r := router.NewRouter()
+	r.POST("/api/pages/:id/reorder", func(c *gin.Context) {
+		c.Set("user_id", int64(1))
+		rp.ReorderPage(c)
+	})
+
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+
+	json := `{"new_parent_id": "` + parentId.String() + `"}`
+	c.Request, _ = http.NewRequest("POST", "/api/pages/"+childId.String()+"/reorder", strings.NewReader(json))
+	r.ServeHTTP(w, c.Request)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
