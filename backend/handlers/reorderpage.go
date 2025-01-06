@@ -117,7 +117,28 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 		return
 	}
 
-	closures := generateAncestorClosuresForPageMove(pageID, input.NewParentId, ancestors[input.NewParentId], descendantIds)
+	var newAncestorsForCurrentPage []PageClosure = make([]PageClosure, 0, len(ancestors[input.NewParentId]))
+	for _, ancestor := range ancestors[input.NewParentId] {
+		newAncestorsForCurrentPage = append(newAncestorsForCurrentPage, PageClosure{
+			AncestorID:   ancestor,
+			DescendantID: pageID,
+			IsParent:     false,
+		})
+	}
+	// since the page is being moved to a new parent, we need to add a new closure
+	newAncestorsForCurrentPage = append(newAncestorsForCurrentPage, PageClosure{
+		AncestorID:   input.NewParentId,
+		DescendantID: pageID,
+		IsParent:     true,
+	})
+
+	var newAncestorIdsForDescendants []uuid.UUID = make([]uuid.UUID, 0, len(newAncestorsForCurrentPage))
+	for _, ancestor := range newAncestorsForCurrentPage {
+		newAncestorIdsForDescendants = append(newAncestorIdsForDescendants, ancestor.AncestorID)
+	}
+
+	descendantClosures := generateAncestorClosuresForDescendants(newAncestorIdsForDescendants, descendantIds)
+	closures := append(newAncestorsForCurrentPage, descendantClosures...)
 	err = insertPageClosures(ctx, tx, closures)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to insert new ancestors of page: %w", err)))
@@ -210,32 +231,11 @@ func getAncestorIds(ctx context.Context, tx pgx.Tx, pageIDs []uuid.UUID) (map[uu
 	return ancestorIds, nil
 }
 
-func generateAncestorClosuresForPageMove(currentPageId uuid.UUID, newParentId uuid.UUID, newParentAncestors []uuid.UUID, descendants []uuid.UUID) []PageClosure {
-	var newCurrentPageAncestors []PageClosure = make([]PageClosure, 0, len(newParentAncestors))
-	for _, ancestor := range newParentAncestors {
-		newCurrentPageAncestors = append(newCurrentPageAncestors, PageClosure{
-			AncestorID:   ancestor,
-			DescendantID: currentPageId,
-			IsParent:     false,
-		})
-	}
-	// since the page is being moved to a new parent, we need to add a new closure
-	newCurrentPageAncestors = append(newCurrentPageAncestors, PageClosure{
-		AncestorID:   newParentId,
-		DescendantID: currentPageId,
-		IsParent:     true,
-	})
-
-	ancestorIdsForDescendants := make([]uuid.UUID, 0, len(newCurrentPageAncestors))
-	for _, ancestor := range newCurrentPageAncestors {
-		ancestorIdsForDescendants = append(ancestorIdsForDescendants, ancestor.AncestorID)
-	}
-
-	var newClosureInserts = make([]PageClosure, 0, len(descendants)*len(ancestorIdsForDescendants))
-	newClosureInserts = append(newClosureInserts, newCurrentPageAncestors...)
+func generateAncestorClosuresForDescendants(newAncestorIds []uuid.UUID, descendants []uuid.UUID) []PageClosure {
+	var newClosureInserts = make([]PageClosure, 0, len(descendants)*len(newAncestorIds))
 	for _, descendantId := range descendants {
-		var ancestors = make([]PageClosure, 0, len(ancestorIdsForDescendants))
-		for _, ancestorId := range ancestorIdsForDescendants {
+		var ancestors = make([]PageClosure, 0, len(newAncestorIds))
+		for _, ancestorId := range newAncestorIds {
 			ancestors = append(ancestors, PageClosure{
 				AncestorID:   ancestorId,
 				DescendantID: descendantId,
@@ -244,7 +244,6 @@ func generateAncestorClosuresForPageMove(currentPageId uuid.UUID, newParentId uu
 		}
 		newClosureInserts = append(newClosureInserts, ancestors...)
 	}
-
 	return newClosureInserts
 }
 
