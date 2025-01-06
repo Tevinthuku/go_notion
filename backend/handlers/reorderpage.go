@@ -60,6 +60,23 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 		return
 	}
 
+	// ensure new parent is not a descendant of the current page
+	var willGenerateCyclicClosure bool
+	err = rp.db.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM pages_closures WHERE ancestor_id = $1 AND descendant_id = $2
+		)
+	`, pageID, input.NewParentId).Scan(&willGenerateCyclicClosure)
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to check if new parent is a descendant: %w", err)))
+		return
+	}
+
+	if willGenerateCyclicClosure {
+		c.Error(api_error.NewBadRequestError("cannot add page to nested page", nil))
+		return
+	}
+
 	tx, err := rp.db.BeginTx(ctx, pgx.TxOptions{})
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to begin transaction: %w", err)))
