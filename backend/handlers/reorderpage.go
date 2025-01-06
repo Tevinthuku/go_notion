@@ -117,7 +117,8 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 		return
 	}
 
-	var newAncestorsForCurrentPage []PageClosure = make([]PageClosure, 0, len(ancestors[input.NewParentId]))
+	// the plus one is for the new parent closure
+	var newAncestorsForCurrentPage []PageClosure = make([]PageClosure, 0, len(ancestors[input.NewParentId])+1)
 	for _, ancestor := range ancestors[input.NewParentId] {
 		newAncestorsForCurrentPage = append(newAncestorsForCurrentPage, PageClosure{
 			AncestorID:   ancestor,
