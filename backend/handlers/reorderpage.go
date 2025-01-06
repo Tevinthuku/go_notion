@@ -79,26 +79,30 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 	}
 	defer tx.Rollback(ctx)
 
-	ancestors, err := getAncestors(ctx, tx, []uuid.UUID{pageID, input.NewParentId})
+	ancestors, err := getAncestorIds(ctx, tx, []uuid.UUID{pageID, input.NewParentId})
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to get ancestors: %w", err)))
 		return
 	}
 
-	relevantDescendantIds := []uuid.UUID{pageID}
-	descendants, err := getDescendants(ctx, tx, pageID)
+	_, err = tx.Exec(ctx, `
+	   DELETE FROM pages_closures WHERE descendant_id = $1
+	`, pageID)
+
+	if err != nil {
+		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to delete old ancestors of page: %w", err)))
+		return
+	}
+
+	descendantIds, err := getDescendants(ctx, tx, pageID)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to get descendants: %w", err)))
 		return
 	}
-	relevantDescendantIds = append(relevantDescendantIds, descendants...)
 
-	existingPageAncestors := ancestors[pageID]
-	existingAncestorIds := make([]uuid.UUID, len(existingPageAncestors))
-	for _, ancestor := range existingPageAncestors {
-		existingAncestorIds = append(existingAncestorIds, ancestor.AncestorID)
-	}
-
+	// we need to delete all the closures that are between the descendants and the current page ancestors
+	// we will re-insert new ancestors for these descendants below
+	existingPageAncestorIds := ancestors[pageID]
 	_, err = tx.Exec(ctx, `
 		    DELETE FROM pages_closures 
 			WHERE (descendant_id, ancestor_id) IN (
@@ -106,30 +110,16 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 				FROM unnest($1::uuid[]) d 
 				CROSS JOIN unnest($2::uuid[]) a
 			)
-		`, relevantDescendantIds, existingAncestorIds)
+		`, descendantIds, existingPageAncestorIds)
 
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to delete old ancestors of page: %w", err)))
 		return
 	}
 
-	var newClosureInserts = make([]PageClosure, len(descendants))
-	// since the page is being moved to a new parent, we need to add a new closure
-	newClosureInserts = append(newClosureInserts, PageClosure{
-		AncestorID:   input.NewParentId,
-		DescendantID: pageID,
-		IsParent:     true,
-	})
-	for _, descendant := range relevantDescendantIds {
-		var newAncestors = make([]PageClosure, len(ancestors[input.NewParentId]))
-		copy(newAncestors, ancestors[input.NewParentId])
-		for i := range newAncestors {
-			newAncestors[i].DescendantID = descendant
-		}
-		newClosureInserts = append(newClosureInserts, newAncestors...)
-	}
+	closures := generateAncestorClosuresForPageMove(pageID, input.NewParentId, ancestors[input.NewParentId], descendantIds)
 
-	err = insertPageClosures(ctx, tx, newClosureInserts)
+	err = insertPageClosures(ctx, tx, closures)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to insert new ancestors of page: %w", err)))
 		return
@@ -202,4 +192,59 @@ func getDescendants(ctx context.Context, tx pgx.Tx, pageID uuid.UUID) ([]uuid.UU
 	}
 
 	return descendants, nil
+}
+
+func getAncestorIds(ctx context.Context, tx pgx.Tx, pageIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
+	ancestors, err := getAncestors(ctx, tx, pageIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ancestors: %w", err)
+	}
+	ancestorIds := make(map[uuid.UUID][]uuid.UUID, len(ancestors))
+	for ancestor, closures := range ancestors {
+		ancestor_ids := make([]uuid.UUID, len(closures))
+		for _, closure := range closures {
+			ancestor_ids = append(ancestor_ids, closure.AncestorID)
+		}
+		ancestorIds[ancestor] = ancestor_ids
+	}
+
+	return ancestorIds, nil
+}
+
+func generateAncestorClosuresForPageMove(currentPageId uuid.UUID, newParentId uuid.UUID, newParentAncestors []uuid.UUID, descendants []uuid.UUID) []PageClosure {
+	var newCurrentPageAncestors []PageClosure = make([]PageClosure, len(newParentAncestors))
+	for _, ancestor := range newParentAncestors {
+		newCurrentPageAncestors = append(newCurrentPageAncestors, PageClosure{
+			AncestorID:   ancestor,
+			DescendantID: currentPageId,
+			IsParent:     false,
+		})
+	}
+	// since the page is being moved to a new parent, we need to add a new closure
+	newCurrentPageAncestors = append(newCurrentPageAncestors, PageClosure{
+		AncestorID:   newParentId,
+		DescendantID: currentPageId,
+		IsParent:     true,
+	})
+
+	ancestorIdsForDescendants := make([]uuid.UUID, len(newCurrentPageAncestors))
+	for _, ancestor := range newCurrentPageAncestors {
+		ancestorIdsForDescendants = append(ancestorIdsForDescendants, ancestor.AncestorID)
+	}
+
+	var newClosureInserts = make([]PageClosure, len(descendants)*len(ancestorIdsForDescendants))
+	newClosureInserts = append(newClosureInserts, newCurrentPageAncestors...)
+	for _, descendantId := range descendants {
+		var ancestors = make([]PageClosure, len(ancestorIdsForDescendants))
+		for _, ancestorId := range ancestorIdsForDescendants {
+			ancestors = append(ancestors, PageClosure{
+				AncestorID:   ancestorId,
+				DescendantID: descendantId,
+				IsParent:     false,
+			})
+		}
+		newClosureInserts = append(newClosureInserts, ancestors...)
+	}
+
+	return newClosureInserts
 }
