@@ -91,40 +91,18 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 		return
 	}
 
-	_, err = tx.Exec(ctx, `
-		DELETE FROM pages_closures WHERE descendant_id = $1
-	`, pageID)
-	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to delete ancestors of page: %w", err)))
-		return
-	}
-	var newPageIdAncestors = make([]PageClosure, len(ancestors[input.NewParentId]))
-	copy(newPageIdAncestors, ancestors[input.NewParentId])
-	newPageIdAncestors = append(newPageIdAncestors, PageClosure{
-		AncestorID:   input.NewParentId,
-		DescendantID: pageID,
-		IsParent:     true,
-	})
-	for i, _ := range newPageIdAncestors {
-		newPageIdAncestors[i].DescendantID = pageID
-	}
-
-	err = insertPageClosures(ctx, tx, newPageIdAncestors)
-	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to insert new ancestors of page: %w", err)))
-		return
-	}
-
+	relevantDescendantIds := []uuid.UUID{pageID}
 	descendants, err := getDescendants(ctx, tx, pageID)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to get descendants: %w", err)))
 		return
 	}
+	relevantDescendantIds = append(relevantDescendantIds, descendants...)
 
-	oldAncestors := ancestors[pageID]
-	oldAncestorIds := make([]uuid.UUID, len(oldAncestors))
-	for _, ancestor := range oldAncestors {
-		oldAncestorIds = append(oldAncestorIds, ancestor.AncestorID)
+	existingPageAncestors := ancestors[pageID]
+	existingAncestorIds := make([]uuid.UUID, len(existingPageAncestors))
+	for _, ancestor := range existingPageAncestors {
+		existingAncestorIds = append(existingAncestorIds, ancestor.AncestorID)
 	}
 
 	_, err = tx.Exec(ctx, `
@@ -134,7 +112,7 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 				FROM unnest($1::uuid[]) d 
 				CROSS JOIN unnest($2::uuid[]) a
 			)
-	`, descendants, oldAncestorIds)
+		`, relevantDescendantIds, existingAncestorIds)
 
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to delete old ancestors of page: %w", err)))
@@ -142,7 +120,13 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 	}
 
 	var newDescendantClosuresToInsert = make([]PageClosure, len(descendants))
-	for _, descendant := range descendants {
+	// since the page is being moved to a new parent, we need to add a new closure
+	newDescendantClosuresToInsert = append(newDescendantClosuresToInsert, PageClosure{
+		AncestorID:   input.NewParentId,
+		DescendantID: pageID,
+		IsParent:     true,
+	})
+	for _, descendant := range relevantDescendantIds {
 		var newAncestors = make([]PageClosure, len(ancestors[input.NewParentId]))
 		copy(newAncestors, ancestors[input.NewParentId])
 		for i := range newAncestors {
