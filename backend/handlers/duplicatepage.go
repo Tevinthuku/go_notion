@@ -142,9 +142,13 @@ func (h *DuplicatePageHandler) duplicateTargetPage(ctx context.Context, tx pgx.T
 		return nil, api_error.NewInternalServerError("failed to change page title", err)
 	}
 
-	pageAncestors, err := getAncestors(ctx, tx, pageID)
+	ancestors, err := getAncestors(ctx, tx, []uuid.UUID{pageID})
 	if err != nil {
 		return nil, api_error.NewInternalServerError("failed to duplicate page", err)
+	}
+	pageAncestors, ok := ancestors[pageID]
+	if !ok {
+		return nil, api_error.NewInternalServerError("failed to duplicate page", fmt.Errorf("failed to find ancestors for page %s", pageID))
 	}
 	// we need to replace pageId with newPageId in the pageAncestors
 	for i := range pageAncestors {
@@ -321,29 +325,29 @@ func insertPageClosures(ctx context.Context, tx pgx.Tx, pageClosures []PageClosu
 	return nil
 }
 
-func getAncestors(ctx context.Context, tx pgx.Tx, pageID uuid.UUID) ([]PageClosure, error) {
+func (dp *DuplicatePageHandler) RegisterRoutes(router *gin.RouterGroup) {
+	router.POST("/pages/:id/duplicate", dp.DuplicatePage)
+}
 
-	pageAncestors := []PageClosure{}
+func getAncestors(ctx context.Context, tx pgx.Tx, pageIDs []uuid.UUID) (map[uuid.UUID][]PageClosure, error) {
 
 	rows, err := tx.Query(ctx, `
-	SELECT ancestor_id, is_parent FROM pages_closures WHERE descendant_id = $1
-	`, pageID)
+	SELECT ancestor_id, descendant_id, is_parent FROM pages_closures WHERE descendant_id = ANY($1)
+	`, pageIDs)
 	if err != nil {
 		return nil, err
 	}
+	ancestors := make(map[uuid.UUID][]PageClosure)
 	for rows.Next() {
 		var ancestorID uuid.UUID
+		var descendantID uuid.UUID
 		var isParent bool
-		if err := rows.Scan(&ancestorID, &isParent); err != nil {
+		if err := rows.Scan(&ancestorID, &descendantID, &isParent); err != nil {
 			return nil, err
 		}
-		pageAncestors = append(pageAncestors, PageClosure{AncestorID: ancestorID, DescendantID: pageID, IsParent: isParent})
+		ancestors[descendantID] = append(ancestors[descendantID], PageClosure{AncestorID: ancestorID, DescendantID: descendantID, IsParent: isParent})
 	}
 	rows.Close()
 
-	return pageAncestors, nil
-}
-
-func (dp *DuplicatePageHandler) RegisterRoutes(router *gin.RouterGroup) {
-	router.POST("/pages/:id/duplicate", dp.DuplicatePage)
+	return ancestors, nil
 }
