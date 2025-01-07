@@ -49,9 +49,13 @@ func (s *SignUpHandler) SignUp(c *gin.Context) {
 		return
 	}
 
-	hashedPassword, err := auth.HashPassword(input.Password)
-	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to process password", err))
+	hashedPassword, hashErr := auth.HashPassword(input.Password)
+	if hashErr != nil {
+		if hashErr.IsPasswordValidationError() {
+			c.Error(api_error.NewBadRequestError(hashErr.Error(), hashErr))
+		} else {
+			c.Error(api_error.NewInternalServerError("failed to process password", hashErr))
+		}
 		return
 	}
 

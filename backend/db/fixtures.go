@@ -16,11 +16,12 @@ func InsertTestUserFixture(conn *pgx.Conn) error {
 
 func InsertTestUserWithData(email, username, password string) Fixture {
 	return func(conn *pgx.Conn) error {
-		hashedPassword, err := auth.HashPassword(password)
-		if err != nil {
-			return fmt.Errorf("error hashing password: %w", err)
+		hashedPassword, hashErr := auth.HashPassword(password)
+
+		if hashErr != nil {
+			return fmt.Errorf("error hashing password: %w", hashErr)
 		}
-		_, err = conn.Exec(context.Background(), `
+		_, err := conn.Exec(context.Background(), `
 		INSERT INTO users (email, username, password) VALUES ($1, $2, $3)
 	`, email, username, hashedPassword)
 		return err
