@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"go_notion/backend/api_error"
-	"go_notion/backend/db"
 	"go_notion/backend/page"
 	"net/http"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // maintaining this list is important to ensure that the query is updated when the schema changes.
@@ -23,13 +23,16 @@ import (
 var PageColumns = []string{"id", "created_by", "position", "text_title", "text_content", "title", "content", "is_top_level"}
 
 type DuplicatePageHandler struct {
-	db         db.DB
+	db         *pgxpool.Pool
 	pageConfig *page.PageConfig
 }
 
-func NewDuplicatePageHandler(db db.DB, pageConfig *page.PageConfig) (*DuplicatePageHandler, error) {
-	if db == nil || pageConfig == nil {
-		return nil, fmt.Errorf("db and pageConfig cannot be nil")
+func NewDuplicatePageHandler(db *pgxpool.Pool, pageConfig *page.PageConfig) (*DuplicatePageHandler, error) {
+	if db == nil {
+		return nil, fmt.Errorf("db cannot be nil")
+	}
+	if pageConfig == nil {
+		return nil, fmt.Errorf("pageConfig cannot be nil")
 	}
 	return &DuplicatePageHandler{db, pageConfig}, nil
 }

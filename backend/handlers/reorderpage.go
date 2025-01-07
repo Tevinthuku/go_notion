@@ -4,20 +4,20 @@ import (
 	"context"
 	"fmt"
 	"go_notion/backend/api_error"
-	"go_notion/backend/db"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type ReorderPageHandler struct {
-	db db.DB
+	db *pgxpool.Pool
 }
 
-func NewReorderPageHandler(db db.DB) (*ReorderPageHandler, error) {
+func NewReorderPageHandler(db *pgxpool.Pool) (*ReorderPageHandler, error) {
 	if db == nil {
 		return nil, fmt.Errorf("db is nil")
 	}

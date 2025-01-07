@@ -4,23 +4,23 @@ import (
 	"context"
 	"fmt"
 	"go_notion/backend/api_error"
-	"go_notion/backend/db"
 	"go_notion/backend/page"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/gofrs/uuid/v5"
 )
 
 type CreatePageHandler struct {
-	db         db.DB
+	db         *pgxpool.Pool
 	pageConfig *page.PageConfig
 }
 
-func NewCreatePageHandler(db db.DB, pageConfig *page.PageConfig) (*CreatePageHandler, error) {
+func NewCreatePageHandler(db *pgxpool.Pool, pageConfig *page.PageConfig) (*CreatePageHandler, error) {
 	if db == nil {
 		return nil, fmt.Errorf("db cannot be nil")
 	}

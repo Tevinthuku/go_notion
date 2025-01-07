@@ -12,7 +12,6 @@ import (
 
 	"github.com/gofrs/uuid/v5"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	pgxuuid "github.com/jackc/pgx-gofrs-uuid"
@@ -130,9 +129,3 @@ func runInner(is_test_mode bool, fixtures ...Fixture) (*pgxpool.Pool, error) {
 }
 
 type Fixture func(*pgx.Conn) error
-
-type DB interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-	BeginTx(ctx context.Context, txOptions pgx.TxOptions) (pgx.Tx, error)
-	Exec(ctx context.Context, sql string, arguments ...any) (commandTag pgconn.CommandTag, err error)
-}
