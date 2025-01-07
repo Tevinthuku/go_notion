@@ -4,16 +4,14 @@ import (
 	"context"
 	"fmt"
 	"go_notion/backend/api_error"
-	"go_notion/backend/authtoken"
+	"go_notion/backend/auth"
 	"go_notion/backend/db"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
-	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -25,10 +23,10 @@ const (
 
 type SignUpHandler struct {
 	db             db.DB
-	tokenGenerator authtoken.TokenGenerator
+	tokenGenerator auth.TokenGenerator
 }
 
-func NewSignUpHandler(db db.DB, tokenGenerator authtoken.TokenGenerator) (*SignUpHandler, error) {
+func NewSignUpHandler(db db.DB, tokenGenerator auth.TokenGenerator) (*SignUpHandler, error) {
 	if db == nil || tokenGenerator == nil {
 		return nil, fmt.Errorf("db and tokenGenerator cannot be nil")
 	}
@@ -50,14 +48,14 @@ func (s *SignUpHandler) SignUp(c *gin.Context) {
 		c.Error(api_error.NewBadRequestError(err.Error(), err))
 		return
 	}
-	cost := BcryptDevCost
-	if os.Getenv("GO_ENV") == "production" {
-		cost = BcryptProdCost
-	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(input.Password), cost)
-	if err != nil {
-		c.Error(api_error.NewInternalServerError("failed to process password", err))
+	hashedPassword, hashErr := auth.HashPassword(input.Password)
+	if hashErr != nil {
+		if hashErr.IsPasswordValidationError() {
+			c.Error(api_error.NewBadRequestError(hashErr.Error(), hashErr))
+		} else {
+			c.Error(api_error.NewInternalServerError("failed to process password", hashErr))
+		}
 		return
 	}
 

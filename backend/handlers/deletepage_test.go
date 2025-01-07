@@ -11,7 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid/v5"
-	"github.com/pashagolub/pgxmock/v4"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,7 +32,6 @@ func TestDeletePage(t *testing.T) {
 		name           string
 		userID         any
 		pageId         string
-		setupMock      func(mock pgxmock.PgxPoolIface)
 		expectedStatus int
 	}{
 		{

@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"go_notion/backend/authtoken"
+	"go_notion/backend/auth"
 	"go_notion/backend/db"
 	"go_notion/backend/handlers"
 	"go_notion/backend/page"
@@ -26,7 +26,7 @@ type Handler interface {
 type App struct {
 	pool        *pgxpool.Pool
 	server      *http.Server
-	tokenConfig *authtoken.TokenConfig
+	tokenConfig *auth.TokenConfig
 	pageConfig  *page.PageConfig
 }
 
@@ -50,7 +50,7 @@ func New(port string) (*App, error) {
 		Handler: appRouter,
 	}
 	app.server = server
-	tokenConfig, err := authtoken.NewTokenConfig()
+	tokenConfig, err := auth.NewTokenConfig()
 	if err != nil {
 		if shutdownErr := app.Shutdown(context.Background()); shutdownErr != nil {
 			return nil, fmt.Errorf("multiple errors: %w", errors.Join(err, shutdownErr))
