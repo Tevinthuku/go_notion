@@ -4,20 +4,20 @@ import (
 	"context"
 	"fmt"
 	"go_notion/backend/api_error"
-	"go_notion/backend/db"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gofrs/uuid/v5"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type DeletePageHandler struct {
-	db db.DB
+	db *pgxpool.Pool
 }
 
-func NewDeletePageHandler(db db.DB) (*DeletePageHandler, error) {
+func NewDeletePageHandler(db *pgxpool.Pool) (*DeletePageHandler, error) {
 	if db == nil {
 		return nil, fmt.Errorf("db cannot be nil")
 	}

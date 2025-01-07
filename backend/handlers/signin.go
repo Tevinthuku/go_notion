@@ -5,21 +5,24 @@ import (
 	"fmt"
 	"go_notion/backend/api_error"
 	"go_notion/backend/auth"
-	"go_notion/backend/db"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type SignInHandler struct {
-	db             db.DB
+	db             *pgxpool.Pool
 	tokenGenerator auth.TokenGenerator
 }
 
-func NewSignInHandler(db db.DB, tokenGenerator auth.TokenGenerator) (*SignInHandler, error) {
-	if db == nil || tokenGenerator == nil {
-		return nil, fmt.Errorf("db and tokenGenerator cannot be nil")
+func NewSignInHandler(db *pgxpool.Pool, tokenGenerator auth.TokenGenerator) (*SignInHandler, error) {
+	if db == nil {
+		return nil, fmt.Errorf("db cannot be nil")
+	}
+	if tokenGenerator == nil {
+		return nil, fmt.Errorf("tokenGenerator cannot be nil")
 	}
 	return &SignInHandler{db, tokenGenerator}, nil
 }
