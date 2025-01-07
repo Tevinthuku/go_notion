@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"go_notion/backend/db"
 	"go_notion/backend/handlers"
 	"go_notion/backend/mocks"
 	"go_notion/backend/router"
@@ -9,17 +10,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/pashagolub/pgxmock/v4"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func TestSignIn(t *testing.T) {
-	mock, err := pgxmock.NewPool()
+
+	email, username, password := "test@test.com", "test", "password"
+
+	pool, err := db.RunTestDb(db.InsertTestUserWithData(email, username, password))
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer mock.Close()
+	defer pool.Close()
 
 	tests := []struct {
 		name          string
@@ -28,25 +30,14 @@ func TestSignIn(t *testing.T) {
 		passwordInput string
 		expectedCode  int
 	}{
-		{name: "test", email: "test@test.com", userPassword: "password", passwordInput: "password", expectedCode: http.StatusOK},
-		{name: "test", email: "test@test.com", userPassword: "password", passwordInput: "wrongpassword", expectedCode: http.StatusBadRequest},
+		{name: "test", email: email, userPassword: password, passwordInput: password, expectedCode: http.StatusOK},
+		{name: "test", email: email, userPassword: password, passwordInput: "wrongpassword", expectedCode: http.StatusBadRequest},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(test.userPassword), handlers.BcryptDevCost)
-			if err != nil {
-				t.Fatal(err)
-			}
-			hashedPasswordString := string(hashedPassword)
-
-			mock.ExpectQuery(`
-					select id, password from users where email=\$1
-				`).
-				WithArgs(test.email).
-				WillReturnRows(pgxmock.NewRows([]string{"id", "password"}).AddRow(int64(1), hashedPasswordString))
 
 			tokenGenerator := &mocks.TokenGeneratorMock{}
-			signIn, err := handlers.NewSignInHandler(mock, tokenGenerator)
+			signIn, err := handlers.NewSignInHandler(pool, tokenGenerator)
 			if err != nil {
 				t.Fatal(err)
 			}

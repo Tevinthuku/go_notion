@@ -32,43 +32,35 @@ func TestUpdatePage(t *testing.T) {
 		name           string
 		userID         any
 		body           string
-		getPageID      func() string
+		pageID         string
 		expectedStatus int
 	}{
 		{
-			name:   "successfully update page",
-			userID: int64(1),
-			body:   `{"title_text": "title", "content_text": "content", "raw_title": {"data": "title"}, "raw_content": {"data": "content"}}`,
-			getPageID: func() string {
-				return pageId.String()
-			},
+			name:           "successfully update page",
+			userID:         int64(1),
+			body:           `{"title_text": "title", "content_text": "content", "raw_title": {"data": "title"}, "raw_content": {"data": "content"}}`,
+			pageID:         pageId.String(),
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:   "invalid user id",
-			userID: "invalid",
-			body:   `{"title_text": "title", "content_text": "content", "raw_title": {"data": "title"}, "raw_content": {"data": "content"}}`,
-			getPageID: func() string {
-				return "123e4567-e89b-12d3-a456-426614174000"
-			},
+			name:           "invalid user id",
+			userID:         "invalid",
+			body:           `{"title_text": "title", "content_text": "content", "raw_title": {"data": "title"}, "raw_content": {"data": "content"}}`,
+			pageID:         "123e4567-e89b-12d3-a456-426614174000",
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name:   "invalid page id",
-			userID: int64(1),
-			body:   `{"title_text": "title", "content_text": "content", "raw_title": {"data": "title"}, "raw_content": {"data": "content"}}`,
-			getPageID: func() string {
-				return "invalid"
-			},
+			name:           "invalid page id",
+			userID:         int64(1),
+			body:           `{"title_text": "title", "content_text": "content", "raw_title": {"data": "title"}, "raw_content": {"data": "content"}}`,
+			pageID:         "invalid",
 			expectedStatus: http.StatusBadRequest,
 		},
 		{
-			name:   "invalid body",
-			userID: int64(1),
-			body:   `{"title_texts": "title"}`,
-			getPageID: func() string {
-				return "d23d0a84-3260-4670-aa1f-5d316ba6325b"
-			},
+			name:           "invalid body",
+			userID:         int64(1),
+			body:           `{"title_texts": "title"}`,
+			pageID:         "d23d0a84-3260-4670-aa1f-5d316ba6325b",
 			expectedStatus: http.StatusBadRequest,
 		},
 	}
@@ -85,7 +77,7 @@ func TestUpdatePage(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			c, _ := gin.CreateTestContext(w)
-			c.Request, _ = http.NewRequest("PUT", "/api/pages/"+test.getPageID(), strings.NewReader(test.body))
+			c.Request, _ = http.NewRequest("PUT", "/api/pages/"+test.pageID, strings.NewReader(test.body))
 
 			r.ServeHTTP(w, c.Request)
 

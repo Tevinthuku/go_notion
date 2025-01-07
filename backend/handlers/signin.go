@@ -4,21 +4,20 @@ import (
 	"context"
 	"fmt"
 	"go_notion/backend/api_error"
-	"go_notion/backend/authtoken"
+	"go_notion/backend/auth"
 	"go_notion/backend/db"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 )
 
 type SignInHandler struct {
 	db             db.DB
-	tokenGenerator authtoken.TokenGenerator
+	tokenGenerator auth.TokenGenerator
 }
 
-func NewSignInHandler(db db.DB, tokenGenerator authtoken.TokenGenerator) (*SignInHandler, error) {
+func NewSignInHandler(db db.DB, tokenGenerator auth.TokenGenerator) (*SignInHandler, error) {
 	if db == nil || tokenGenerator == nil {
 		return nil, fmt.Errorf("db and tokenGenerator cannot be nil")
 	}
@@ -49,7 +48,8 @@ func (s *SignInHandler) SignIn(c *gin.Context) {
 		c.Error(api_error.NewBadRequestError("wrong email or password", err))
 		return
 	}
-	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(input.Password)); err != nil {
+
+	if !auth.ComparePassword(input.Password, hashedPassword) {
 		// as a security practice, we should not be too direct about what exactly went wrong because
 		// "hackers" could try and brute force the password once we let them know its the password that's wrong
 		c.Error(api_error.NewBadRequestError("wrong email or password", err))
