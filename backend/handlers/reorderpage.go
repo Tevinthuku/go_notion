@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go_notion/backend/api_error"
+	"go_notion/backend/page"
 	"net/http"
 	"time"
 
@@ -118,16 +119,16 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 	}
 
 	// the plus one is for the new parent closure
-	var newAncestorsForCurrentPage []PageClosure = make([]PageClosure, 0, len(ancestors[input.NewParentId])+1)
+	var newAncestorsForCurrentPage []page.Closure = make([]page.Closure, 0, len(ancestors[input.NewParentId])+1)
 	for _, ancestor := range ancestors[input.NewParentId] {
-		newAncestorsForCurrentPage = append(newAncestorsForCurrentPage, PageClosure{
+		newAncestorsForCurrentPage = append(newAncestorsForCurrentPage, page.Closure{
 			AncestorID:   ancestor,
 			DescendantID: pageID,
 			IsParent:     false,
 		})
 	}
 	// since the page is being moved to a new parent, we need to add a new closure
-	newAncestorsForCurrentPage = append(newAncestorsForCurrentPage, PageClosure{
+	newAncestorsForCurrentPage = append(newAncestorsForCurrentPage, page.Closure{
 		AncestorID:   input.NewParentId,
 		DescendantID: pageID,
 		IsParent:     true,
@@ -140,7 +141,7 @@ func (rp *ReorderPageHandler) ReorderPage(c *gin.Context) {
 
 	descendantClosures := generateAncestorClosuresForDescendants(newAncestorIdsForDescendants, descendantIds)
 	closures := append(newAncestorsForCurrentPage, descendantClosures...)
-	err = insertPageClosures(ctx, tx, closures)
+	err = page.InsertPageClosures(ctx, tx, closures)
 	if err != nil {
 		c.Error(api_error.NewInternalServerError("failed to reorder page", fmt.Errorf("failed to insert new ancestors of page: %w", err)))
 		return
@@ -216,7 +217,7 @@ func getDescendants(ctx context.Context, tx pgx.Tx, pageID uuid.UUID) ([]uuid.UU
 }
 
 func getAncestorIds(ctx context.Context, tx pgx.Tx, pageIDs []uuid.UUID) (map[uuid.UUID][]uuid.UUID, error) {
-	ancestors, err := getAncestors(ctx, tx, pageIDs)
+	ancestors, err := page.GetAncestors(ctx, tx, pageIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get ancestors: %w", err)
 	}
@@ -232,12 +233,12 @@ func getAncestorIds(ctx context.Context, tx pgx.Tx, pageIDs []uuid.UUID) (map[uu
 	return ancestorIds, nil
 }
 
-func generateAncestorClosuresForDescendants(newAncestorIds []uuid.UUID, descendants []uuid.UUID) []PageClosure {
-	var newClosureInserts = make([]PageClosure, 0, len(descendants)*len(newAncestorIds))
+func generateAncestorClosuresForDescendants(newAncestorIds []uuid.UUID, descendants []uuid.UUID) []page.Closure {
+	var newClosureInserts = make([]page.Closure, 0, len(descendants)*len(newAncestorIds))
 	for _, descendantId := range descendants {
-		var ancestors = make([]PageClosure, 0, len(newAncestorIds))
+		var ancestors = make([]page.Closure, 0, len(newAncestorIds))
 		for _, ancestorId := range newAncestorIds {
-			ancestors = append(ancestors, PageClosure{
+			ancestors = append(ancestors, page.Closure{
 				AncestorID:   ancestorId,
 				DescendantID: descendantId,
 				IsParent:     false,

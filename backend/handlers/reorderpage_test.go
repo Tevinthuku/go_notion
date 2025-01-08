@@ -18,7 +18,7 @@ func TestReorderPageWorks(t *testing.T) {
 	parentId := uuid.Must(uuid.NewV4())
 	childId := uuid.Must(uuid.NewV4())
 	upComingParentId := uuid.Must(uuid.NewV4())
-	pool, err := db.RunTestDb(db.InsertTestUserFixture, db.InsertTestPageFixtureWithParent(parentId, childId, 1), db.InsertTestPageFixtureWithPosition(upComingParentId, 1, 200))
+	pool, err := db.OpenTestDb(db.InsertTestUserFixture, db.InsertTestPageFixtureWithParent(parentId, childId, 1), db.InsertTestPageFixtureWithPosition(upComingParentId, 1, 200))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,7 +48,7 @@ func TestReorderPageWorks(t *testing.T) {
 func TestReorderPageToDescendantDoesntWork(t *testing.T) {
 	parentId := uuid.Must(uuid.NewV4())
 	childId := uuid.Must(uuid.NewV4())
-	pool, err := db.RunTestDb(db.InsertTestUserFixture, db.InsertTestPageFixtureWithParent(parentId, childId, 1))
+	pool, err := db.OpenTestDb(db.InsertTestUserFixture, db.InsertTestPageFixtureWithParent(parentId, childId, 1))
 	if err != nil {
 		t.Fatal(err)
 	}

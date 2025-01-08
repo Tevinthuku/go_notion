@@ -19,7 +19,7 @@ import (
 
 func TestPageColumnsAreInSyncWithDb(t *testing.T) {
 
-	pool, err := db.RunTestDb()
+	pool, err := db.OpenTestDb()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestPageColumnsAreInSyncWithDb(t *testing.T) {
 
 func TestDuplicatePage(t *testing.T) {
 	page_id := uuid.Must(uuid.NewV4())
-	pool, err := db.RunTestDb(db.InsertTestUserFixture, db.InsertTestPageFixture(page_id, 1))
+	pool, err := db.OpenTestDb(db.InsertTestUserFixture, db.InsertTestPageFixture(page_id, 1))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +119,7 @@ func TestDuplicatePage(t *testing.T) {
 func TestDuplicatePageWithNestedPages(t *testing.T) {
 	parentPageId := uuid.Must(uuid.NewV4())
 	childPageId := uuid.Must(uuid.NewV4())
-	pool, err := db.RunTestDb(db.InsertTestUserFixture, db.InsertTestPageFixtureWithParent(childPageId, parentPageId, 1))
+	pool, err := db.OpenTestDb(db.InsertTestUserFixture, db.InsertTestPageFixtureWithParent(childPageId, parentPageId, 1))
 	if err != nil {
 		t.Fatal(err)
 	}

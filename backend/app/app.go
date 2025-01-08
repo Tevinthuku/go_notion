@@ -35,7 +35,7 @@ func New(port string) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error loading .env file: %w", err)
 	}
-	pool, err := db.Run()
+	pool, err := db.OpenDb()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create database pool: %w", err)
 	}

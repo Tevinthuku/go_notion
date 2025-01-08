@@ -17,12 +17,12 @@ import (
 	pgxuuid "github.com/jackc/pgx-gofrs-uuid"
 )
 
-func RunTestDb(fixtures ...Fixture) (*pgxpool.Pool, error) {
-	return runInner(true, fixtures...)
+func OpenTestDb(fixtures ...Fixture) (*pgxpool.Pool, error) {
+	return openDbInner(true, fixtures...)
 }
 
-func Run() (*pgxpool.Pool, error) {
-	return runInner(false)
+func OpenDb() (*pgxpool.Pool, error) {
+	return openDbInner(false)
 }
 
 // Run initializes a database connection pool and applies pending migrations.
@@ -35,7 +35,7 @@ func Run() (*pgxpool.Pool, error) {
 // They are useful for setting up the database with test data.
 //
 // Returns a connection pool and any error encountered during setup.
-func runInner(is_test_mode bool, fixtures ...Fixture) (*pgxpool.Pool, error) {
+func openDbInner(is_test_mode bool, fixtures ...Fixture) (*pgxpool.Pool, error) {
 	// loading of env variables is done at app startup
 	dbURL, ok := os.LookupEnv("DATABASE_URL")
 	if !ok {

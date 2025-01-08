@@ -15,7 +15,7 @@ import (
 
 func TestSignUp(t *testing.T) {
 
-	pool, err := db.RunTestDb()
+	pool, err := db.OpenTestDb()
 	if err != nil {
 		t.Fatal(err)
 	}

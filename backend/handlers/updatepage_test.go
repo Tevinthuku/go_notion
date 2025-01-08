@@ -17,7 +17,7 @@ import (
 func TestUpdatePage(t *testing.T) {
 
 	pageId := uuid.Must(uuid.NewV4())
-	pool, err := db.RunTestDb(db.InsertTestUserFixture, db.InsertTestPageFixture(pageId, 1))
+	pool, err := db.OpenTestDb(db.InsertTestUserFixture, db.InsertTestPageFixture(pageId, 1))
 	if err != nil {
 		t.Fatal(err)
 	}

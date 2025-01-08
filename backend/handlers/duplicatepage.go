@@ -145,7 +145,7 @@ func (h *DuplicatePageHandler) duplicateTargetPage(ctx context.Context, tx pgx.T
 		return nil, api_error.NewInternalServerError("failed to change page title", err)
 	}
 
-	ancestors, err := getAncestors(ctx, tx, []uuid.UUID{pageID})
+	ancestors, err := page.GetAncestors(ctx, tx, []uuid.UUID{pageID})
 	if err != nil {
 		return nil, api_error.NewInternalServerError("failed to duplicate page", err)
 	}
@@ -156,7 +156,7 @@ func (h *DuplicatePageHandler) duplicateTargetPage(ctx context.Context, tx pgx.T
 		pageAncestors[i].DescendantID = newPageID
 	}
 
-	err = insertPageClosures(ctx, tx, pageAncestors)
+	err = page.InsertPageClosures(ctx, tx, pageAncestors)
 	if err != nil {
 		return nil, api_error.NewInternalServerError("failed to duplicate page", err)
 	}
@@ -166,7 +166,7 @@ func (h *DuplicatePageHandler) duplicateTargetPage(ctx context.Context, tx pgx.T
 
 func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.Tx, pageID uuid.UUID, newPageID uuid.UUID, lastPagePosition float64) error {
 
-	var descendantsWithAllAncestors []PageClosure
+	var descendantsWithAllAncestors []page.Closure
 
 	rows, err := tx.Query(ctx, `
 	    WITH descendants AS (
@@ -189,7 +189,7 @@ func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.
 		if err := rows.Scan(&ancestorID, &descendantID, &isParent); err != nil {
 			return err
 		}
-		descendantsWithAllAncestors = append(descendantsWithAllAncestors, PageClosure{AncestorID: ancestorID, DescendantID: descendantID, IsParent: isParent})
+		descendantsWithAllAncestors = append(descendantsWithAllAncestors, page.Closure{AncestorID: ancestorID, DescendantID: descendantID, IsParent: isParent})
 	}
 	rows.Close()
 
@@ -197,7 +197,7 @@ func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.
 		return nil
 	}
 
-	mappingOfDescendantsWithAllAncestors := make(map[uuid.UUID][]PageClosure)
+	mappingOfDescendantsWithAllAncestors := make(map[uuid.UUID][]page.Closure)
 	uniqueDescendants := make(map[uuid.UUID]struct{})
 	for _, closure := range descendantsWithAllAncestors {
 		uniqueDescendants[closure.DescendantID] = struct{}{}
@@ -214,7 +214,7 @@ func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.
 		return fmt.Errorf("failed to duplicate descendant pages: %w", err)
 	}
 
-	var newPageClosureInserts = make([]PageClosure, 0, len(descendantsWithAllAncestors))
+	var newPageClosureInserts = make([]page.Closure, 0, len(descendantsWithAllAncestors))
 
 	for descendantId, ancestors := range mappingOfDescendantsWithAllAncestors {
 		newDescendantID, ok := mappingOfOldDescendantToNewDescendantId[descendantId]
@@ -228,21 +228,21 @@ func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.
 
 			// pageID is the page that we are duplicating, so we need to update the page closure to point to the new page
 			if ancestorID == pageID {
-				newPageClosureInserts = append(newPageClosureInserts, PageClosure{AncestorID: newPageID, DescendantID: newDescendantID, IsParent: closure.IsParent})
+				newPageClosureInserts = append(newPageClosureInserts, page.Closure{AncestorID: newPageID, DescendantID: newDescendantID, IsParent: closure.IsParent})
 				continue
 			}
 
 			// if the ancestor is a descendant of the page we are duplicating, we need to update the page closure to point to the new descendant page
 			if newAncestorID, ok := mappingOfOldDescendantToNewDescendantId[ancestorID]; ok {
-				newPageClosureInserts = append(newPageClosureInserts, PageClosure{AncestorID: newAncestorID, DescendantID: newDescendantID, IsParent: closure.IsParent})
+				newPageClosureInserts = append(newPageClosureInserts, page.Closure{AncestorID: newAncestorID, DescendantID: newDescendantID, IsParent: closure.IsParent})
 				continue
 			}
-			newPageClosureInserts = append(newPageClosureInserts, PageClosure{AncestorID: ancestorID, DescendantID: newDescendantID, IsParent: closure.IsParent})
+			newPageClosureInserts = append(newPageClosureInserts, page.Closure{AncestorID: ancestorID, DescendantID: newDescendantID, IsParent: closure.IsParent})
 
 		}
 	}
 
-	err = insertPageClosures(ctx, tx, newPageClosureInserts)
+	err = page.InsertPageClosures(ctx, tx, newPageClosureInserts)
 	if err != nil {
 		return fmt.Errorf("failed to insert new page closures: %w", err)
 	}
@@ -298,57 +298,6 @@ func (h *DuplicatePageHandler) duplicatePages(ctx context.Context, tx pgx.Tx, pa
 
 }
 
-type PageClosure struct {
-	AncestorID   uuid.UUID
-	DescendantID uuid.UUID
-	IsParent     bool
-}
-
-func insertPageClosures(ctx context.Context, tx pgx.Tx, pageClosures []PageClosure) error {
-	if len(pageClosures) == 0 {
-		return nil
-	}
-	valueStrings := make([]string, 0, len(pageClosures))
-	valueArgs := make([]interface{}, 0, len(pageClosures)*3)
-	for i, closure := range pageClosures {
-		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d)", i*3+1, i*3+2, i*3+3))
-		valueArgs = append(valueArgs, closure.AncestorID, closure.DescendantID, closure.IsParent)
-	}
-
-	query := fmt.Sprintf(`
-		INSERT INTO pages_closures (ancestor_id, descendant_id, is_parent) VALUES %s
-	`, strings.Join(valueStrings, ","))
-
-	_, err := tx.Exec(ctx, query, valueArgs...)
-	if err != nil {
-		return fmt.Errorf("failed to insert page closures: %w", err)
-	}
-	return nil
-}
-
 func (dp *DuplicatePageHandler) RegisterRoutes(router *gin.RouterGroup) {
 	router.POST("/pages/:id/duplicate", dp.DuplicatePage)
-}
-
-func getAncestors(ctx context.Context, tx pgx.Tx, pageIDs []uuid.UUID) (map[uuid.UUID][]PageClosure, error) {
-
-	rows, err := tx.Query(ctx, `
-	SELECT ancestor_id, descendant_id, is_parent FROM pages_closures WHERE descendant_id = ANY($1)
-	`, pageIDs)
-	if err != nil {
-		return nil, err
-	}
-	ancestors := make(map[uuid.UUID][]PageClosure)
-	for rows.Next() {
-		var ancestorID uuid.UUID
-		var descendantID uuid.UUID
-		var isParent bool
-		if err := rows.Scan(&ancestorID, &descendantID, &isParent); err != nil {
-			return nil, err
-		}
-		ancestors[descendantID] = append(ancestors[descendantID], PageClosure{AncestorID: ancestorID, DescendantID: descendantID, IsParent: isParent})
-	}
-	rows.Close()
-
-	return ancestors, nil
 }
