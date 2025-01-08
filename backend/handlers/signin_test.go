@@ -17,7 +17,7 @@ func TestSignIn(t *testing.T) {
 
 	email, username, password := "test@test.com", "test", "password"
 
-	pool, err := db.RunTestDb(db.InsertTestUserWithData(email, username, password))
+	pool, err := db.OpenTestDb(db.InsertTestUserWithData(email, username, password))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,7 +6,6 @@ import (
 	"go_notion/backend/router"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -14,8 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestUpdatePage(t *testing.T) {
-
+func TestGetPage(t *testing.T) {
 	pageId := uuid.Must(uuid.NewV4())
 	pool, err := db.OpenTestDb(db.InsertTestUserFixture, db.InsertTestPageFixture(pageId, 1))
 	if err != nil {
@@ -23,7 +21,7 @@ func TestUpdatePage(t *testing.T) {
 	}
 	defer pool.Close()
 
-	updatePage, err := handlers.NewUpdatePageHandler(pool)
+	getPage, err := handlers.NewGetPageHandler(pool)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -31,37 +29,32 @@ func TestUpdatePage(t *testing.T) {
 	tests := []struct {
 		name           string
 		userID         any
-		body           string
 		pageID         string
 		expectedStatus int
 	}{
 		{
-			name:           "successfully update page",
+			name:           "successfully get page",
 			userID:         int64(1),
-			body:           `{"title_text": "title", "content_text": "content", "raw_title": {"data": "title"}, "raw_content": {"data": "content"}}`,
 			pageID:         pageId.String(),
 			expectedStatus: http.StatusOK,
 		},
 		{
 			name:           "invalid user id",
 			userID:         "invalid",
-			body:           `{"title_text": "title", "content_text": "content", "raw_title": {"data": "title"}, "raw_content": {"data": "content"}}`,
-			pageID:         "123e4567-e89b-12d3-a456-426614174000",
+			pageID:         pageId.String(),
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name:           "invalid page id",
+			name:           "page not found",
 			userID:         int64(1),
-			body:           `{"title_text": "title", "content_text": "content", "raw_title": {"data": "title"}, "raw_content": {"data": "content"}}`,
-			pageID:         "invalid",
-			expectedStatus: http.StatusBadRequest,
+			pageID:         uuid.Must(uuid.NewV4()).String(),
+			expectedStatus: http.StatusNotFound,
 		},
 		{
-			name:           "invalid body",
-			userID:         int64(1),
-			body:           `{"title_texts": "title"}`,
-			pageID:         "d23d0a84-3260-4670-aa1f-5d316ba6325b",
-			expectedStatus: http.StatusBadRequest,
+			name:           "user not page owner",
+			userID:         int64(2),
+			pageID:         pageId.String(),
+			expectedStatus: http.StatusNotFound,
 		},
 	}
 
@@ -69,15 +62,15 @@ func TestUpdatePage(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			r := router.NewRouter()
 
-			r.PUT("/api/pages/:id", func(c *gin.Context) {
+			r.GET("/api/pages/:id", func(c *gin.Context) {
 				c.Set("user_id", test.userID)
-				updatePage.UpdatePage(c)
+				getPage.GetPage(c)
 			})
 
 			w := httptest.NewRecorder()
 
 			c, _ := gin.CreateTestContext(w)
-			c.Request, _ = http.NewRequest("PUT", "/api/pages/"+test.pageID, strings.NewReader(test.body))
+			c.Request, _ = http.NewRequest("GET", "/api/pages/"+test.pageID, nil)
 
 			r.ServeHTTP(w, c.Request)
 

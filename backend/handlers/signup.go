@@ -14,13 +14,6 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-const (
-	// BcryptDevCost is the recommended cost for development environments
-	BcryptDevCost = 10
-	// BcryptProdCost is the recommended cost for production environments
-	BcryptProdCost = 12
-)
-
 type SignUpHandler struct {
 	db             *pgxpool.Pool
 	tokenGenerator auth.TokenGenerator
