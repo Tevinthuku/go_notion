@@ -99,7 +99,7 @@ func (gp *GetPagesHandler) getTopLevelPages(ctx context.Context, params *GetPage
 }
 
 type GetPagesParams struct {
-	Size         *int       `form:"size,omitempty" binding:"omitempty,min=1,max=100"`
+	Size          *int       `form:"size,omitempty" binding:"omitempty,min=1,max=100"`
 	CreatedBefore *time.Time `form:"created_before"`
 }
 
@@ -130,7 +130,7 @@ func (gp *GetPagesHandler) generateSubPagesForTopLevelPages(ctx context.Context,
 
 	mappingOfAncestorIdToDescendants, err := gp.getAncestorToDescendantsMapping(ctx, pageIds)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get ancestor to descendants mapping: %w", err)
 	}
 
 	var uniqueDescendantIds = make(map[uuid.UUID]struct{})
@@ -151,7 +151,7 @@ func (gp *GetPagesHandler) generateSubPagesForTopLevelPages(ctx context.Context,
 	`, descendantIds)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get text title for descendants: %w", err)
 	}
 
 	var mappingOfDescendantIdToTextTitle = make(map[uuid.UUID]*string)
@@ -159,7 +159,7 @@ func (gp *GetPagesHandler) generateSubPagesForTopLevelPages(ctx context.Context,
 		var id uuid.UUID
 		var textTitle *string
 		if err := rows.Scan(&id, &textTitle); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan text title for descendant: %w", err)
 		}
 		mappingOfDescendantIdToTextTitle[id] = textTitle
 	}
@@ -194,13 +194,13 @@ func (gp *GetPagesHandler) generateSubPagesForTopLevelPages(ctx context.Context,
 func (gp *GetPagesHandler) getAncestorToDescendantsMapping(ctx context.Context, pageIds []uuid.UUID) (map[uuid.UUID][]page.Closure, error) {
 	conn, err := gp.db.Acquire(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to acquire db connection: %w", err)
 	}
 	defer conn.Release()
 
 	descendantsWithAllAncestors, err := page.GetAllDescendantsWithAllAncestors(ctx, conn.Conn(), pageIds)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get all descendants with all ancestors: %w", err)
 	}
 
 	mappingOfAncestorIdToDescendants := make(map[uuid.UUID][]page.Closure)
