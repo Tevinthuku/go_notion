@@ -84,12 +84,12 @@ func (gp *GetPagesHandler) getTopLevelPages(ctx context.Context, params *GetPage
 	var pages []page.Page
 	var err error
 	if params.CreatedAfter != nil {
-		pages, err = page.GetPages(ctx, gp.db, "WHERE user_id = $1 AND is_top_level = true AND created_at > $2 ORDER BY created_at DESC LIMIT $3", userId, params.CreatedAfter, size)
+		pages, err = page.GetPages(ctx, gp.db, "WHERE created_by = $1 AND is_top_level = true AND created_at > $2 ORDER BY created_at DESC LIMIT $3", userId, params.CreatedAfter, size)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		pages, err = page.GetPages(ctx, gp.db, "WHERE user_id = $1 AND is_top_level = true ORDER BY created_at DESC LIMIT $2", userId, size)
+		pages, err = page.GetPages(ctx, gp.db, "WHERE created_by = $1 AND is_top_level = true ORDER BY created_at DESC LIMIT $2", userId, size)
 		if err != nil {
 			return nil, err
 		}
@@ -99,7 +99,7 @@ func (gp *GetPagesHandler) getTopLevelPages(ctx context.Context, params *GetPage
 }
 
 type GetPagesParams struct {
-	Size         *int       `form:"size" binding:"min=1,max=100"`
+	Size         *int       `form:"size,omitempty" binding:"omitempty,min=1,max=100"`
 	CreatedAfter *time.Time `form:"created_after"`
 }
 
@@ -128,26 +128,22 @@ type SubPage struct {
 
 func (gp *GetPagesHandler) generateSubPagesForTopLevelPages(ctx context.Context, pageIds []uuid.UUID) (map[uuid.UUID][]SubPage, error) {
 
-	conn, err := gp.db.Acquire(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer conn.Release()
-
-	descendantsWithAllAncestors, err := page.GetAllDescendants(ctx, conn.Conn(), pageIds)
+	mappingOfAncestorIdToDescendants, err := gp.getAncestorToDescendantsMapping(ctx, pageIds)
 	if err != nil {
 		return nil, err
 	}
 
-	descendantIds := make([]uuid.UUID, 0, len(descendantsWithAllAncestors))
-	for descendantId := range descendantsWithAllAncestors {
+	var uniqueDescendantIds = make(map[uuid.UUID]struct{})
+	for _, closures := range mappingOfAncestorIdToDescendants {
+		for _, c := range closures {
+			uniqueDescendantIds[c.DescendantID] = struct{}{}
+		}
+	}
+	descendantIds := make([]uuid.UUID, 0, len(uniqueDescendantIds))
+	for descendantId := range uniqueDescendantIds {
 		descendantIds = append(descendantIds, descendantId)
 	}
 
-	type bareDescendant struct {
-		ID        uuid.UUID
-		TextTitle *string
-	}
 	rows, err := gp.db.Query(ctx, `
 		SELECT id, text_title
 		FROM pages
@@ -158,27 +154,28 @@ func (gp *GetPagesHandler) generateSubPagesForTopLevelPages(ctx context.Context,
 		return nil, err
 	}
 
-	var mappingOfDescendantIdToBareDescendant = make(map[uuid.UUID]bareDescendant)
+	var mappingOfDescendantIdToTextTitle = make(map[uuid.UUID]*string)
 	for rows.Next() {
-		var bareDescendant bareDescendant
-		if err := rows.Scan(&bareDescendant.ID, &bareDescendant.TextTitle); err != nil {
+		var id uuid.UUID
+		var textTitle *string
+		if err := rows.Scan(&id, &textTitle); err != nil {
 			return nil, err
 		}
-		mappingOfDescendantIdToBareDescendant[bareDescendant.ID] = bareDescendant
+		mappingOfDescendantIdToTextTitle[id] = textTitle
 	}
 
 	var mappingOfPageIdToSubPages = make(map[uuid.UUID][]SubPage)
 
 	var buildSubPageTree func(pageId uuid.UUID) []SubPage
 	buildSubPageTree = func(pageId uuid.UUID) []SubPage {
-		descendants := descendantsWithAllAncestors[pageId]
+		descendants := mappingOfAncestorIdToDescendants[pageId]
 		subPages := []SubPage{}
 
 		for _, closure := range descendants {
 			if closure.IsParent {
 				subPage := SubPage{
 					ID:        closure.DescendantID,
-					TextTitle: mappingOfDescendantIdToBareDescendant[closure.DescendantID].TextTitle,
+					TextTitle: mappingOfDescendantIdToTextTitle[closure.DescendantID],
 					SubPages:  buildSubPageTree(closure.DescendantID),
 				}
 				subPages = append(subPages, subPage)
@@ -192,6 +189,28 @@ func (gp *GetPagesHandler) generateSubPagesForTopLevelPages(ctx context.Context,
 	}
 
 	return mappingOfPageIdToSubPages, nil
+}
+
+func (gp *GetPagesHandler) getAncestorToDescendantsMapping(ctx context.Context, pageIds []uuid.UUID) (map[uuid.UUID][]page.Closure, error) {
+	conn, err := gp.db.Acquire(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Release()
+
+	descendantsWithAllAncestors, err := page.GetAllDescendantsWithAllAncestors(ctx, conn.Conn(), pageIds)
+	if err != nil {
+		return nil, err
+	}
+
+	mappingOfAncestorIdToDescendants := make(map[uuid.UUID][]page.Closure)
+	for _, closure := range descendantsWithAllAncestors {
+		for _, c := range closure {
+			mappingOfAncestorIdToDescendants[c.AncestorID] = append(mappingOfAncestorIdToDescendants[c.AncestorID], c)
+		}
+	}
+
+	return mappingOfAncestorIdToDescendants, nil
 }
 
 func (gp *GetPagesHandler) RegisterRoutes(router *gin.RouterGroup) {

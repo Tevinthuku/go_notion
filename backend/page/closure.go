@@ -61,7 +61,7 @@ func GetAncestors(ctx context.Context, tx pgx.Tx, pageIDs []uuid.UUID) (map[uuid
 	return ancestors, nil
 }
 
-func GetAllDescendants(ctx context.Context, conn *pgx.Conn, pageIDs []uuid.UUID) (map[uuid.UUID][]Closure, error) {
+func GetAllDescendantsWithAllAncestors(ctx context.Context, conn *pgx.Conn, pageIDs []uuid.UUID) (map[uuid.UUID][]Closure, error) {
 	var descendantsWithAllAncestors []Closure
 
 	rows, err := conn.Query(ctx, `

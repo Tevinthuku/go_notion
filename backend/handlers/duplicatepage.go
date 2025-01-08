@@ -166,7 +166,7 @@ func (h *DuplicatePageHandler) duplicateTargetPage(ctx context.Context, tx pgx.T
 
 func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.Tx, pageID uuid.UUID, newPageID uuid.UUID, lastPagePosition float64) error {
 
-	mappingOfDescendantsWithAllAncestors, err := page.GetAllDescendants(ctx, tx.Conn(), []uuid.UUID{pageID})
+	mappingOfDescendantsWithAllAncestors, err := page.GetAllDescendantsWithAllAncestors(ctx, tx.Conn(), []uuid.UUID{pageID})
 	if err != nil {
 		return fmt.Errorf("failed to get all descendants: %w", err)
 	}
