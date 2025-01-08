@@ -100,7 +100,7 @@ func (gp *GetPagesHandler) getTopLevelPages(ctx context.Context, params *GetPage
 
 type GetPagesParams struct {
 	Size          *int       `form:"size,omitempty" binding:"omitempty,min=1,max=100"`
-	CreatedBefore *time.Time `form:"created_before"`
+	CreatedBefore *time.Time `form:"created_before,omitempty"`
 }
 
 func getPagesParamsFromQuery(c *gin.Context) (*GetPagesParams, error) {
