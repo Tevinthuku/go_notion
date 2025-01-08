@@ -83,8 +83,8 @@ func (gp *GetPagesHandler) getTopLevelPages(ctx context.Context, params *GetPage
 
 	var pages []page.Page
 	var err error
-	if params.CreatedAfter != nil {
-		pages, err = page.GetPages(ctx, gp.db, "WHERE created_by = $1 AND is_top_level = true AND created_at > $2 ORDER BY created_at DESC LIMIT $3", userId, params.CreatedAfter, size)
+	if params.CreatedBefore != nil {
+		pages, err = page.GetPages(ctx, gp.db, "WHERE created_by = $1 AND is_top_level = true AND created_at < $2 ORDER BY created_at DESC LIMIT $3", userId, params.CreatedBefore, size)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +100,7 @@ func (gp *GetPagesHandler) getTopLevelPages(ctx context.Context, params *GetPage
 
 type GetPagesParams struct {
 	Size         *int       `form:"size,omitempty" binding:"omitempty,min=1,max=100"`
-	CreatedAfter *time.Time `form:"created_after"`
+	CreatedBefore *time.Time `form:"created_before"`
 }
 
 func getPagesParamsFromQuery(c *gin.Context) (*GetPagesParams, error) {
