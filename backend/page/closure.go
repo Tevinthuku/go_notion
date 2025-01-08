@@ -60,3 +60,45 @@ func GetAncestors(ctx context.Context, tx pgx.Tx, pageIDs []uuid.UUID) (map[uuid
 
 	return ancestors, nil
 }
+
+func GetAllDescendants(ctx context.Context, conn *pgx.Conn, pageIDs []uuid.UUID) (map[uuid.UUID][]Closure, error) {
+	var descendantsWithAllAncestors []Closure
+
+	rows, err := conn.Query(ctx, `
+	    WITH descendants AS (
+            SELECT descendant_id 
+            FROM pages_closures 
+            WHERE ancestor_id = ANY($1)
+        )
+        SELECT DISTINCT pc.ancestor_id, pc.descendant_id, pc.is_parent
+        FROM pages_closures pc
+        INNER JOIN descendants d ON d.descendant_id = pc.descendant_id
+	`, pageIDs)
+
+	if err != nil {
+		return nil, err
+	}
+
+	for rows.Next() {
+		var ancestorID uuid.UUID
+		var isParent bool
+		var descendantID uuid.UUID
+		if err := rows.Scan(&ancestorID, &descendantID, &isParent); err != nil {
+			return nil, err
+		}
+		descendantsWithAllAncestors = append(descendantsWithAllAncestors, Closure{AncestorID: ancestorID, DescendantID: descendantID, IsParent: isParent})
+	}
+	rows.Close()
+
+	if len(descendantsWithAllAncestors) == 0 {
+		return nil, nil
+	}
+
+	mappingOfDescendantsWithAllAncestors := make(map[uuid.UUID][]Closure)
+
+	for _, closure := range descendantsWithAllAncestors {
+		mappingOfDescendantsWithAllAncestors[closure.DescendantID] = append(mappingOfDescendantsWithAllAncestors[closure.DescendantID], closure)
+	}
+
+	return mappingOfDescendantsWithAllAncestors, nil
+}

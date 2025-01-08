@@ -35,7 +35,7 @@ func (gp *GetPageHandler) GetPage(c *gin.Context) {
 
 	userID, ok := c.Get("user_id")
 	if !ok {
-		c.Error(api_error.NewUnauthorizedError("not authorized to update page", nil))
+		c.Error(api_error.NewUnauthorizedError("not authorized to get page", nil))
 		return
 	}
 
@@ -57,12 +57,7 @@ func (gp *GetPageHandler) GetPage(c *gin.Context) {
 		return
 	}
 
-	var page page.Page
-
-	err = gp.db.QueryRow(ctx, `
-		SELECT id, title, content, text_title, text_content, created_at, updated_at FROM pages WHERE id = $1 AND created_by = $2
-	`, pageID, userIdInt).Scan(&page.ID, &page.Title, &page.Content, &page.TextTitle, &page.TextContent, &page.CreatedAt, &page.UpdatedAt)
-
+	pages, err := page.GetPages(ctx, gp.db, "WHERE id = $1 AND created_by = $2", pageID, userIdInt)
 	if err == pgx.ErrNoRows {
 		c.Error(api_error.NewNotFoundError("page not found", nil))
 		return
@@ -70,6 +65,13 @@ func (gp *GetPageHandler) GetPage(c *gin.Context) {
 		c.Error(api_error.NewInternalServerError("error getting page", err))
 		return
 	}
+
+	if len(pages) == 0 {
+		c.Error(api_error.NewNotFoundError("page not found", nil))
+		return
+	}
+
+	var page = pages[0]
 
 	c.JSON(http.StatusOK, PageResponse{Data: page})
 }

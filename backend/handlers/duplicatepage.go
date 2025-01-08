@@ -166,42 +166,13 @@ func (h *DuplicatePageHandler) duplicateTargetPage(ctx context.Context, tx pgx.T
 
 func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.Tx, pageID uuid.UUID, newPageID uuid.UUID, lastPagePosition float64) error {
 
-	var descendantsWithAllAncestors []page.Closure
-
-	rows, err := tx.Query(ctx, `
-	    WITH descendants AS (
-            SELECT descendant_id 
-            FROM pages_closures 
-            WHERE ancestor_id = $1
-        )
-        SELECT DISTINCT pc.ancestor_id, pc.descendant_id, pc.is_parent
-        FROM pages_closures pc
-        INNER JOIN descendants d ON d.descendant_id = pc.descendant_id
-	`, pageID)
+	mappingOfDescendantsWithAllAncestors, err := page.GetAllDescendants(ctx, tx.Conn(), []uuid.UUID{pageID})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get all descendants: %w", err)
 	}
-
-	for rows.Next() {
-		var ancestorID uuid.UUID
-		var isParent bool
-		var descendantID uuid.UUID
-		if err := rows.Scan(&ancestorID, &descendantID, &isParent); err != nil {
-			return err
-		}
-		descendantsWithAllAncestors = append(descendantsWithAllAncestors, page.Closure{AncestorID: ancestorID, DescendantID: descendantID, IsParent: isParent})
-	}
-	rows.Close()
-
-	if len(descendantsWithAllAncestors) == 0 {
-		return nil
-	}
-
-	mappingOfDescendantsWithAllAncestors := make(map[uuid.UUID][]page.Closure)
 	uniqueDescendants := make(map[uuid.UUID]struct{})
-	for _, closure := range descendantsWithAllAncestors {
-		uniqueDescendants[closure.DescendantID] = struct{}{}
-		mappingOfDescendantsWithAllAncestors[closure.DescendantID] = append(mappingOfDescendantsWithAllAncestors[closure.DescendantID], closure)
+	for descendantID, _ := range mappingOfDescendantsWithAllAncestors {
+		uniqueDescendants[descendantID] = struct{}{}
 	}
 
 	var descendantIds []uuid.UUID
@@ -214,7 +185,7 @@ func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.
 		return fmt.Errorf("failed to duplicate descendant pages: %w", err)
 	}
 
-	var newPageClosureInserts = make([]page.Closure, 0, len(descendantsWithAllAncestors))
+	var newPageClosureInserts []page.Closure
 
 	for descendantId, ancestors := range mappingOfDescendantsWithAllAncestors {
 		newDescendantID, ok := mappingOfOldDescendantToNewDescendantId[descendantId]
