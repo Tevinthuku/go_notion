@@ -92,6 +92,11 @@ func (app *App) registerHandlers(appRouter *gin.Engine) error {
 		return fmt.Errorf("error creating page handler: %w", err)
 	}
 
+	getPage, err := handlers.NewGetPageHandler(app.pool)
+	if err != nil {
+		return fmt.Errorf("error creating get page handler: %w", err)
+	}
+
 	updatePage, err := handlers.NewUpdatePageHandler(app.pool)
 	if err != nil {
 		return fmt.Errorf("error creating update page handler: %w", err)
@@ -113,7 +118,7 @@ func (app *App) registerHandlers(appRouter *gin.Engine) error {
 	}
 
 	// protected routes
-	protectedRoutes := []Handler{newPage, updatePage, deletePage, duplicatePage, reorderPage}
+	protectedRoutes := []Handler{newPage, getPage, updatePage, deletePage, duplicatePage, reorderPage}
 	protectedApiGroup := apiv1.Group("", app.tokenConfig.AuthMiddleware())
 	for _, r := range protectedRoutes {
 		r.RegisterRoutes(protectedApiGroup)
