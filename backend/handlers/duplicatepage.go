@@ -171,7 +171,7 @@ func (h *DuplicatePageHandler) duplicateDescendants(ctx context.Context, tx pgx.
 		return fmt.Errorf("failed to get all descendants: %w", err)
 	}
 	uniqueDescendants := make(map[uuid.UUID]struct{})
-	for descendantID, _ := range mappingOfDescendantsWithAllAncestors {
+	for descendantID := range mappingOfDescendantsWithAllAncestors {
 		uniqueDescendants[descendantID] = struct{}{}
 	}
 
