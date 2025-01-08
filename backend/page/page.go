@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/gofrs/uuid/v5"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -21,9 +22,20 @@ type Page struct {
 
 func GetPages(ctx context.Context, db *pgxpool.Pool, whereClause string, args ...any) ([]Page, error) {
 
+	tx, err := db.BeginTx(ctx, pgx.TxOptions{
+		// Set transaction to read-only mode
+		// This ensures the transaction cannot perform any database modifications (INSERT/UPDATE/DELETE)
+		// and allows PostgreSQL to optimize for read-only operations
+		AccessMode: pgx.ReadOnly,
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
 	var query = "SELECT id, title, content, text_title, text_content, created_at, updated_at FROM pages WHERE " + whereClause
 
-	rows, err := db.Query(ctx, query, args...)
+	rows, err := tx.Query(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -37,5 +49,10 @@ func GetPages(ctx context.Context, db *pgxpool.Pool, whereClause string, args ..
 		}
 		pages = append(pages, p)
 	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
 	return pages, nil
 }
