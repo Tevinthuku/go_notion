@@ -236,15 +236,13 @@ func getAncestorIds(ctx context.Context, tx pgx.Tx, pageIDs []uuid.UUID) (map[uu
 func generateAncestorClosuresForDescendants(newAncestorIds []uuid.UUID, descendants []uuid.UUID) []page.Closure {
 	var newClosureInserts = make([]page.Closure, 0, len(descendants)*len(newAncestorIds))
 	for _, descendantId := range descendants {
-		var ancestors = make([]page.Closure, 0, len(newAncestorIds))
 		for _, ancestorId := range newAncestorIds {
-			ancestors = append(ancestors, page.Closure{
+			newClosureInserts = append(newClosureInserts, page.Closure{
 				AncestorID:   ancestorId,
 				DescendantID: descendantId,
 				IsParent:     false,
 			})
 		}
-		newClosureInserts = append(newClosureInserts, ancestors...)
 	}
 	return newClosureInserts
 }

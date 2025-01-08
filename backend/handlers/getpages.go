@@ -36,7 +36,7 @@ func (gp *GetPagesHandler) GetPages(c *gin.Context) {
 
 	userIdInt, ok := userID.(int64)
 	if !ok {
-		c.Error(api_error.NewUnauthorizedError("not authorized to update page", fmt.Errorf("user id is not an integer")))
+		c.Error(api_error.NewUnauthorizedError("not authorized to get pages", fmt.Errorf("user id is not an integer")))
 		return
 	}
 
@@ -84,12 +84,12 @@ func (gp *GetPagesHandler) getTopLevelPages(ctx context.Context, params *GetPage
 	var pages []page.Page
 	var err error
 	if params.CreatedBefore != nil {
-		pages, err = page.GetPages(ctx, gp.db, "WHERE created_by = $1 AND is_top_level = true AND created_at < $2 ORDER BY created_at DESC LIMIT $3", userId, params.CreatedBefore, size)
+		pages, err = page.GetPages(ctx, gp.db, "created_by = $1 AND is_top_level = true AND created_at < $2 ORDER BY created_at DESC LIMIT $3", userId, params.CreatedBefore, size)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		pages, err = page.GetPages(ctx, gp.db, "WHERE created_by = $1 AND is_top_level = true ORDER BY created_at DESC LIMIT $2", userId, size)
+		pages, err = page.GetPages(ctx, gp.db, "created_by = $1 AND is_top_level = true ORDER BY created_at DESC LIMIT $2", userId, size)
 		if err != nil {
 			return nil, err
 		}

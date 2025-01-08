@@ -41,7 +41,7 @@ func (gp *GetPageHandler) GetPage(c *gin.Context) {
 
 	userIdInt, ok := userID.(int64)
 	if !ok {
-		c.Error(api_error.NewUnauthorizedError("not authorized to update page", fmt.Errorf("user id is not an integer")))
+		c.Error(api_error.NewUnauthorizedError("not authorized to get page", fmt.Errorf("user id is not an integer")))
 		return
 	}
 
@@ -57,7 +57,7 @@ func (gp *GetPageHandler) GetPage(c *gin.Context) {
 		return
 	}
 
-	pages, err := page.GetPages(ctx, gp.db, "WHERE id = $1 AND created_by = $2", pageID, userIdInt)
+	pages, err := page.GetPages(ctx, gp.db, "id = $1 AND created_by = $2", pageID, userIdInt)
 	if err == pgx.ErrNoRows {
 		c.Error(api_error.NewNotFoundError("page not found", nil))
 		return

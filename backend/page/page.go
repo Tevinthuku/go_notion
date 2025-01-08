@@ -21,8 +21,7 @@ type Page struct {
 
 func GetPages(ctx context.Context, db *pgxpool.Pool, whereClause string, args ...any) ([]Page, error) {
 
-	var query = "SELECT id, title, content, text_title, text_content, created_at, updated_at FROM pages "
-	query += whereClause
+	var query = "SELECT id, title, content, text_title, text_content, created_at, updated_at FROM pages WHERE " + whereClause
 
 	rows, err := db.Query(ctx, query, args...)
 	if err != nil {
